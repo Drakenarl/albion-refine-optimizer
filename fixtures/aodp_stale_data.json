@@ -1,0 +1,58 @@
+[
+  {
+    "_comment": "Fixture pour tester la gestion des données stales : Bridgewatch a des prix vieux de 8h (rouge critique), Thetford 4h30 (jaune warning), Martlock 15 min (frais).",
+    "_expected_behavior": "Bridgewatch doit être exclu par défaut, Thetford doit apparaître avec badge jaune, Martlock avec badge vert."
+  },
+  {
+    "item_id": "T7_WOOD",
+    "city": "Bridgewatch",
+    "quality": 1,
+    "sell_price_min": 220,
+    "sell_price_min_date": "2026-07-19T07:15:00",
+    "sell_price_max": 240,
+    "sell_price_max_date": "2026-07-19T07:15:00",
+    "buy_price_min": 170,
+    "buy_price_min_date": "2026-07-19T07:15:00",
+    "buy_price_max": 195,
+    "buy_price_max_date": "2026-07-19T07:15:00"
+  },
+  {
+    "item_id": "T7_WOOD",
+    "city": "Thetford",
+    "quality": 1,
+    "sell_price_min": 258,
+    "sell_price_min_date": "2026-07-19T10:45:00",
+    "sell_price_max": 285,
+    "sell_price_max_date": "2026-07-19T10:45:00",
+    "buy_price_min": 195,
+    "buy_price_min_date": "2026-07-19T10:45:00",
+    "buy_price_max": 215,
+    "buy_price_max_date": "2026-07-19T10:45:00"
+  },
+  {
+    "item_id": "T7_WOOD",
+    "city": "Martlock",
+    "quality": 1,
+    "sell_price_min": 245,
+    "sell_price_min_date": "2026-07-19T15:05:00",
+    "sell_price_max": 275,
+    "sell_price_max_date": "2026-07-19T15:05:00",
+    "buy_price_min": 180,
+    "buy_price_min_date": "2026-07-19T15:05:00",
+    "buy_price_max": 210,
+    "buy_price_max_date": "2026-07-19T15:05:00"
+  },
+  {
+    "item_id": "T7_PLANKS",
+    "city": "Brecilien",
+    "quality": 1,
+    "sell_price_min": 0,
+    "sell_price_min_date": "0001-01-01T00:00:00",
+    "sell_price_max": 0,
+    "sell_price_max_date": "0001-01-01T00:00:00",
+    "buy_price_min": 0,
+    "buy_price_min_date": "0001-01-01T00:00:00",
+    "buy_price_max": 0,
+    "buy_price_max_date": "0001-01-01T00:00:00"
+  }
+]
