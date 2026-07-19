@@ -127,15 +127,27 @@
       }
     }
   },
-  "nutrition_cost_by_tier": {
-    "_note": "Coût de base consommé par la station de raffinage, à multiplier par (1 + fee_owner_pct/100). Valeurs à vérifier en jeu par l'utilisateur.",
-    "T2": 2,
-    "T3": 4,
-    "T4": 8,
-    "T5": 16,
-    "T6": 32,
-    "T7": 64,
-    "T8": 128
+  "refined_item_values": {
+    "_note": "Item Value (IV) des planks raffinés par tier. À reconfirmer en jeu.",
+    "_source": "forum.albiononline.com Thread 49690 + Thread 128681, cross-check avec patch v19.000.1",
+    "T4": 14,
+    "T5": 30,
+    "T6": 62,
+    "T7": 126,
+    "T8": 254
+  },
+  "nutrition_per_refined_unit": {
+    "_note": "Nutrition consommée par unité raffinée = IV × 0.1125. Valeurs approximatives à reconfirmer.",
+    "T4": 1.575,
+    "T5": 3.375,
+    "T6": 6.975,
+    "T7": 14.175,
+    "T8": 28.575
+  },
+  "station_fee_format": {
+    "_note": "Depuis patch v19.000.1, les station owners fixent leur fee en 'silver par 100 nutrition consommée', pas en pourcentage. Voir SPEC.md section 3.4 pour la formule corrigée.",
+    "example": "Un owner fixe 50 silver/100 nutrition. Raffiner 100 T7 planks consomme 100 × 14.175 = 1417.5 nutrition. Coût station = 1417.5 × (50/100) = 708.75 silver.",
+    "typical_range_silver_per_100_nutrition": "30 à 500"
   },
   "cities": {
     "Caerleon": {

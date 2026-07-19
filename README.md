@@ -59,7 +59,7 @@ albion-refine optimize \
   --tier 7 \
   --mode focus \
   --focus-available 10000 \
-  --station-fee 18
+  --station-rate 50
 ```
 
 ### Optimiser sur un budget capital
@@ -69,7 +69,7 @@ albion-refine optimize \
   --tier 6 \
   --mode capital \
   --capital 500000 \
-  --station-fee 20
+  --station-rate 50
 ```
 
 ### Optimiser une quantité fixe avec daily bonus
@@ -80,7 +80,7 @@ albion-refine optimize \
   --mode fixed \
   --quantite 64 \
   --daily-bonus 20 \
-  --station-fee 15
+  --station-rate 50
 ```
 
 ### Sortie JSON pour intégration

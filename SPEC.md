@@ -111,21 +111,15 @@ Tous les revenus sont calculés **nets de tax**. Le setup fee du sell order est 
 
 ### 3.4. Coût de raffinage à la station
 
+Le coût de la station en silver se calcule ainsi (depuis patch v19.000.1) :
+
 ```
-coût_station = nutrition_per_unit(tier) × quantité × (silver_per_100_nutrition / 100)
+coût_station_silver = quantité × nutrition_per_unit(tier) × (silver_per_100_nutrition / 100)
 ```
 
-Le nutrition cost par tier (à vérifier en jeu, valeurs approximatives) :
+Le `silver_per_100_nutrition` est fixé par l'owner de la station et visible en jeu dans l'UI de la station (typiquement entre 30 et 500 silver par 100 nutrition). C'est un **input utilisateur** de la CLI.
 
-| Tier | Nutrition cost (par unité) |
-|---|---|
-| T4 | 8 |
-| T5 | 16 |
-| T6 | 32 |
-| T7 | 64 |
-| T8 | 128 |
-
-⚠ **Action requise avant dev** : Duvalier doit confirmer ces valeurs en jeu ou depuis le wiki officiel Albion. Voir section 15.
+Voir `items.json` section `nutrition_per_refined_unit` pour les valeurs par tier.
 
 ### 3.5. Villes Royal du continent
 
@@ -336,6 +330,8 @@ DEFAULTS = {
 }
 ```
 
+⚠ Le `silver_per_100_nutrition` (rate de la station, depuis patch v19.000.1) n'a **pas** de valeur par défaut sensée : l'utilisateur DOIT le fournir via `--station-rate`. Voir section 3.4.
+
 ### 6.5. Tax rates (no premium)
 
 ```python
@@ -397,7 +393,7 @@ def walk_book(book, quantity_needed):
 ```
 coût_bois          = walk_book(sell_orders_wood_ville_A, Q) → total_cost
 coût_plank_T-1     = walk_book(sell_orders_plank_ville_B, Q) → total_cost
-coût_station       = nutrition_cost(N) × (1 + fee_owner_pct/100) × Q
+coût_station       = Q × nutrition_per_unit(N) × (silver_per_100_nutrition / 100)
 coût_focus_silver  = focus_utilisé × prix_silver_par_focus (paramètre user)
 
 coût_total = coût_bois + coût_plank_T-1 + coût_station + coût_focus_silver
@@ -548,7 +544,7 @@ albion-refine optimize \
   --mode focus \
   --focus-available 10000 \
   --daily-bonus none \
-  --station-fee 18 \
+  --station-rate 50 \
   --seuil-marge 30 \
   --exclude-vente Brecilien \
   --format table
@@ -570,7 +566,7 @@ albion-refine optimize \
 │                   fraîcheur : 12 min ✓                        │
 │ ACHAT PLANK T6    Fort Sterling  890 s × 128    = 113 920 s  │
 │                   fraîcheur : 45 min ✓                        │
-│ RAFFINAGE FS      fee 18% + nutrition           = 2 100 s     │
+│ RAFFINAGE FS      50 s/100 nutrition            = 2 100 s     │
 │ FOCUS             10 000 focus                                │
 │                                                               │
 │ RRR effectif : 54% (focus ON, daily bonus OFF)                │
@@ -792,8 +788,8 @@ Sera spécifié séparément dans un `SPEC_V3.md` une fois V2 stable. Placeholde
 
 ### 15.1. Informations à confirmer en jeu
 
-1. **Nutrition cost par tier** : ouvrir la station de raffinage à FS, hover chaque tier, noter le nutrition cost affiché. Confirmer ou corriger la table de la section 3.4.
-2. **Fee actuel de la station FS** (juste pour tester, sera un input CLI).
+1. **Nutrition par unité raffinée** : ouvrir la station de raffinage à FS, hover chaque tier, noter le nutrition cost affiché par unité. Confirmer ou corriger la table `nutrition_per_refined_unit` de `items.json` (valeurs = Item Value × 0.1125). Si écart > 5%, ouvrir un `QUESTIONS.md`.
+2. **Rate actuel de la station FS** en silver par 100 nutrition (depuis patch v19.000.1, l'owner fixe un `silver_per_100_nutrition`, plus un pourcentage). Juste pour tester, sera un input CLI obligatoire.
 3. **Niveau de spécialisation Plankmaster par tier** dans le Destiny Board (screenshot des tiers T4 à T8 sous Toolmaker → Planks). Utile pour V2 quand on calculera précisément le focus cost par action.
 4. **Focus disponible actuel** (juste pour tester le mode focus).
 5. **Cost-per-focus estimation** : combien de silver coûte 1 point de focus en équivalent (souvent estimé à 0 en gameplay solo, ou à un coût d'opportunité selon le joueur).
