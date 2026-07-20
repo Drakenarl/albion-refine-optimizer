@@ -66,6 +66,50 @@ def plank_item_id(tier: int) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Recettes de raffinage (SPEC_FIX section 1.2, confirmées in-game le 20/07/2026)
+# ---------------------------------------------------------------------------
+
+# Format : tier du plank produit -> (quantité de bois T{N}, quantité de plank T{N-1})
+# pour UNE unité de plank produite. La V1.0 supposait à tort (1, 1) partout, ce
+# qui sous-estimait massivement le coût en bois brut aux tiers 5 à 8.
+PLANK_RECIPES: Final[dict[int, tuple[int, int]]] = {
+    2: (1, 0),
+    3: (2, 1),
+    4: (2, 1),
+    5: (3, 1),
+    6: (4, 1),
+    7: (5, 1),
+    8: (5, 1),
+}
+
+
+def plank_recipe(tier: int) -> tuple[int, int]:
+    """Retourne la recette d'un plank : ``(bois requis, plank T-1 requis)``.
+
+    Args:
+        tier: Tier du plank produit (2 à 8).
+
+    Returns:
+        Un tuple ``(wood_qty, lower_plank_qty)`` par unité produite. Le T2 vaut
+        ``(1, 0)`` : il n'a pas d'input plank.
+
+    Raises:
+        KeyError: Si le tier n'a pas de recette connue.
+    """
+    return PLANK_RECIPES[tier]
+
+
+def wood_qty_per_plank(tier: int) -> int:
+    """Retourne la quantité de bois brut nécessaire pour un plank de ce tier."""
+    return plank_recipe(tier)[0]
+
+
+def lower_plank_qty_per_plank(tier: int) -> int:
+    """Retourne la quantité de plank T-1 nécessaire pour un plank de ce tier (0 en T2)."""
+    return plank_recipe(tier)[1]
+
+
+# ---------------------------------------------------------------------------
 # Villes Royal du continent (voir SPEC section 6.2)
 # ---------------------------------------------------------------------------
 

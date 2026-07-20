@@ -67,6 +67,82 @@ def walk_book(book: list[tuple[float, int]], quantity_needed: int) -> WalkResult
     )
 
 
+def walk_book_descending(book: list[tuple[float, int]], quantity: int) -> WalkResult:
+    """Parcourt un carnet de **buy orders** (du meilleur prix vers le plus bas).
+
+    Contrairement à ``walk_book``, l'absorption partielle est autorisée : on
+    revend ce que le carnet peut absorber et le reste est simplement ignoré
+    (SPEC_FIX section 5.2).
+
+    Args:
+        book: Carnet de buy orders, liste de ``(prix, stack)`` en ordre décroissant.
+        quantity: Quantité que l'on cherche à écouler.
+
+    Returns:
+        Un ``WalkResult`` dont ``total_absorbed`` peut être inférieur à
+        ``quantity`` (voire nul si le carnet est vide).
+    """
+    total_revenue = 0.0
+    total_absorbed = 0
+    if quantity > 0:
+        for prix, stack in book:
+            if stack <= 0 or prix <= 0:
+                continue
+            prendre = min(stack, quantity - total_absorbed)
+            total_revenue += prendre * prix
+            total_absorbed += prendre
+            if total_absorbed >= quantity:
+                break
+    prix_moyen = total_revenue / total_absorbed if total_absorbed else 0.0
+    return WalkResult(
+        prix_moyen=prix_moyen, total_cost=total_revenue, total_absorbed=total_absorbed
+    )
+
+
+class RecoveryResult(NamedTuple):
+    """Valorisation des retours RRR après parcours du carnet d'achat."""
+
+    valeur: float
+    absorbe: int
+    demande: int
+
+    @property
+    def partielle(self) -> bool:
+        """Vrai si une partie des retours n'a pas trouvé preneur."""
+        return self.absorbe < self.demande
+
+
+def compute_recovery_value(
+    quantity_returned: float,
+    buy_orders: list[tuple[float, int]],
+) -> RecoveryResult:
+    """Valorise les retours RRR en instant sell, carnet d'achat à l'appui.
+
+    La V1.0 créditait ``top_buy_price × quantité_retournée`` sans vérifier que
+    les buy orders absorbaient réellement la quantité — irréaliste dès qu'on
+    retourne des milliers d'unités (SPEC_FIX section 5). On ne crédite désormais
+    que la part effectivement absorbable ; le reste reste en inventaire, non
+    valorisé. Sans buy order, la récupération vaut 0 silver.
+
+    Args:
+        quantity_returned: Quantité retournée par le RRR (arrondie à l'entier
+            inférieur : on ne revend pas une fraction d'unité).
+        buy_orders: Carnet de buy orders ``(prix, stack)`` dans la ville de
+            raffinage, du meilleur prix au moins bon.
+
+    Returns:
+        Un ``RecoveryResult`` avec la valeur nette de taxe, la quantité
+        absorbée et la quantité demandée.
+    """
+    demande = int(quantity_returned)
+    walk = walk_book_descending(buy_orders, demande)
+    return RecoveryResult(
+        valeur=apply_instant_sell_tax(walk.total_cost),
+        absorbe=walk.total_absorbed,
+        demande=demande,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Fraîcheur des données
 # ---------------------------------------------------------------------------
@@ -97,6 +173,34 @@ def classify_freshness(
     return FreshnessLevel.FRESH
 
 
+def freshness_confidence_factor(age_hours_value: float | None) -> float:
+    """Retourne le facteur de confiance à appliquer à un revenu attendu.
+
+    Un prix vieux de 5h n'est pas aussi fiable qu'un prix de 30 minutes : on
+    escompte progressivement le revenu de vente (SPEC_FIX section 6). Les coûts
+    d'achat ne sont **pas** pondérés : ils seront confirmés en jeu avant l'achat.
+
+    Args:
+        age_hours_value: Âge de la donnée en heures, ou ``None`` si inconnu
+            (traité comme une donnée très vieille, cohérent avec
+            ``classify_freshness``).
+
+    Returns:
+        Un facteur entre 0.5 et 1.0.
+    """
+    if age_hours_value is None:
+        return 0.50
+    if age_hours_value < 0.5:
+        return 1.0
+    if age_hours_value < 2:
+        return 0.95
+    if age_hours_value < 4:
+        return 0.85
+    if age_hours_value < 6:
+        return 0.70
+    return 0.50
+
+
 def age_hours(age: timedelta | None) -> float | None:
     """Convertit un ``timedelta`` en heures (ou ``None``)."""
     if age is None:
@@ -124,21 +228,73 @@ def apply_sell_order_tax(gross: float) -> float:
 # ---------------------------------------------------------------------------
 
 
-def fill_probability(volume_24h: float, planks: int) -> float:
-    """Estime la probabilité qu'un sell order soit rempli sous 24h.
+# Plafond dur : un sell order n'est jamais certain d'être rempli sous 24h.
+FILL_PROBABILITY_CAP: float = 0.85
 
-    Approximation V1 : ``min(1.0, volume_24h / planks)`` (SPEC 7.7).
+
+def estimate_position_in_book(listing_price: float, top_sell_order_price: float) -> int:
+    """Estime la position de notre ordre dans le carnet de vente.
+
+    L'endpoint ``/prices`` de l'AODP ne donne que le meilleur sell order, pas la
+    profondeur. Approximation conservative de la V1.1 (SPEC_FIX 4.3) : si on
+    sous-cote le top on devient premier, sinon on suppose être enterré en 3e
+    position. La vraie profondeur est une amélioration V2.
 
     Args:
-        volume_24h: Volume échangé sur 24h dans la ville de vente.
-        planks: Quantité de planks à écouler.
+        listing_price: Prix auquel on compte lister.
+        top_sell_order_price: Prix du meilleur sell order actuel.
 
     Returns:
-        Une probabilité entre 0 et 1. Vaut 0 si le volume ou la quantité est nul.
+        La position estimée (1 ou 3).
     """
-    if planks <= 0 or volume_24h <= 0:
+    return 1 if listing_price <= top_sell_order_price else 3
+
+
+def compute_fill_probability(
+    quantity_to_sell: int,
+    volume_24h: float,
+    position_in_book: int,
+    listing_price: float,
+    top_sell_order_price: float,
+) -> float:
+    """Estime la probabilité qu'un sell order soit rempli sous 24h.
+
+    Remplace la formule naïve ``min(1, volume / quantité)`` de la V1.0, qui
+    renvoyait 100% dès que le volume dépassait la quantité (SPEC_FIX section 4).
+    Trois facteurs se combinent : le ratio volume/quantité (plafonné), la
+    position dans le carnet et la compétitivité du prix de listing.
+
+    Args:
+        quantity_to_sell: Quantité de planks à écouler.
+        volume_24h: Volume échangé sur 24h dans la ville de vente.
+        position_in_book: Nombre d'ordres empilés au-dessus (1 = nouveau top).
+        listing_price: Prix auquel on liste.
+        top_sell_order_price: Prix du meilleur sell order actuel.
+
+    Returns:
+        Une probabilité entre 0 et ``FILL_PROBABILITY_CAP`` (jamais 100%).
+    """
+    if volume_24h <= 0 or top_sell_order_price <= 0:
         return 0.0
-    return min(1.0, volume_24h / planks)
+
+    # Facteur 1 : ratio volume/quantité, plafonné bien en dessous de 100%.
+    ratio = volume_24h / max(quantity_to_sell, 1)
+    volume_factor = min(FILL_PROBABILITY_CAP, ratio * 0.6)
+
+    # Facteur 2 : position dans le carnet (plus on est enterré, pire c'est).
+    position_penalty = max(0.3, 1.0 - (position_in_book * 0.15))
+
+    # Facteur 3 : compétitivité du prix de listing.
+    undercut_pct = (top_sell_order_price - listing_price) / top_sell_order_price
+    if undercut_pct < 0:
+        price_factor = 0.5  # plus cher que le top : très mauvais
+    elif undercut_pct < 0.005:
+        price_factor = 0.7  # undercut < 0.5% : peu compétitif
+    else:
+        price_factor = 1.0
+
+    proba = volume_factor * position_penalty * price_factor
+    return min(FILL_PROBABILITY_CAP, max(0.0, proba))
 
 
 # ---------------------------------------------------------------------------
@@ -180,15 +336,20 @@ def evaluate_instant_sell(
             data_age_hours=data_age_hours,
         )
     revenu_net = apply_instant_sell_tax(walk.total_cost)
+    facteur = freshness_confidence_factor(data_age_hours)
+    revenu_pondere = revenu_net * facteur
     return SalesScenario(
+        certitude="haute",
         strategy=SellStrategy.INSTANT_SELL,
         city=city,
         planks=planks,
         prix_unitaire_ref=buy_price_max,
         revenu_brut=walk.total_cost,
         revenu_net=revenu_net,
+        freshness_factor=facteur,
+        revenu_net_pondere=revenu_pondere,
         fill_proba=1.0,
-        expected_revenu=revenu_net,
+        expected_revenu=revenu_pondere,
         stack_suffisant=True,
         data_age_hours=data_age_hours,
     )
@@ -233,19 +394,71 @@ def evaluate_sell_order(
     prix_listing = min_sell_price * (1.0 - undercut_pct / 100.0)
     revenu_brut = prix_listing * planks
     revenu_net_if_filled = apply_sell_order_tax(revenu_brut)
-    proba = fill_probability(volume_24h, planks)
+    proba = compute_fill_probability(
+        quantity_to_sell=planks,
+        volume_24h=volume_24h,
+        position_in_book=estimate_position_in_book(prix_listing, min_sell_price),
+        listing_price=prix_listing,
+        top_sell_order_price=min_sell_price,
+    )
+    facteur = freshness_confidence_factor(data_age_hours)
+    revenu_pondere = revenu_net_if_filled * facteur
     return SalesScenario(
+        certitude="moyenne",
         strategy=SellStrategy.SELL_ORDER,
         city=city,
         planks=planks,
         prix_unitaire_ref=prix_listing,
         revenu_brut=revenu_brut,
         revenu_net=revenu_net_if_filled,
+        freshness_factor=facteur,
+        revenu_net_pondere=revenu_pondere,
         fill_proba=proba,
-        expected_revenu=revenu_net_if_filled * proba,
+        expected_revenu=revenu_pondere * proba,
         stack_suffisant=True,
         data_age_hours=data_age_hours,
     )
+
+
+# Écart d'espérance de revenu au-delà duquel le sell order vaut le risque
+# d'attente et d'undercut (SPEC_FIX section 3 : « gain marginal insuffisant »).
+SEUIL_GAIN_MARGINAL_PCT: float = 10.0
+
+
+def recommend_strategy(
+    scenario_a: SalesScenario | None,
+    scenario_b: SalesScenario | None,
+    *,
+    min_fill_proba: float = 0.0,
+) -> str:
+    """Recommande une stratégie de vente en comparant les deux scénarios.
+
+    Args:
+        scenario_a: Scénario instant sell (revenu immédiat), ou ``None``.
+        scenario_b: Scénario sell order (revenu conditionnel), ou ``None``.
+        min_fill_proba: Fill probability minimale sous laquelle le sell order
+            n'est jamais recommandé.
+
+    Returns:
+        ``"instant_sell"``, ``"sell_order"`` ou ``"au_choix"`` quand le gain
+        marginal du sell order reste sous ``SEUIL_GAIN_MARGINAL_PCT``.
+    """
+    b_viable = (
+        scenario_b is not None
+        and scenario_b.stack_suffisant
+        and scenario_b.fill_proba >= min_fill_proba
+    )
+    if scenario_a is None or not scenario_a.stack_suffisant:
+        return "sell_order" if b_viable else "instant_sell"
+    if not b_viable or scenario_b is None:
+        return "instant_sell"
+
+    gain = scenario_b.expected_revenu - scenario_a.expected_revenu
+    if gain <= 0:
+        return "instant_sell"
+    if gain > scenario_a.expected_revenu * SEUIL_GAIN_MARGINAL_PCT / 100.0:
+        return "sell_order"
+    return "au_choix"
 
 
 def best_scenario(scenarios: list[SalesScenario]) -> SalesScenario | None:

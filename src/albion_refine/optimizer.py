@@ -29,8 +29,8 @@ from albion_refine.models import (
     Route,
     RunMetadata,
     SalesScenario,
-    SellStrategy,
     SourcingLeg,
+    VenteBlock,
     VolumeData,
     WarningCode,
 )
@@ -143,11 +143,34 @@ def _make_leg(
     )
 
 
-def _recuperation(quote_fs: PriceQuote | None, retour: float, ignore: bool) -> float:
-    """Crédite la revente des retours RRR en instant sell à Fort Sterling."""
+def _recuperation(
+    quote_fs: PriceQuote | None,
+    volume_fs: VolumeData | None,
+    retour: float,
+    ignore: bool,
+) -> market.RecoveryResult:
+    """Valorise les retours RRR en instant sell à Fort Sterling, carnet à l'appui.
+
+    L'AODP n'expose pas la profondeur des buy orders : on estime le stack
+    absorbable par le **volume échangé sur 24h** de l'item dans la ville de
+    raffinage. Sans historique exploitable, on ne crédite rien plutôt que de
+    supposer une profondeur infinie (choix conservateur, SPEC_FIX 5.3).
+
+    Args:
+        quote_fs: Prix de l'item à Fort Sterling.
+        volume_fs: Volume 24h de l'item à Fort Sterling (profondeur estimée).
+        retour: Quantité retournée par le RRR.
+        ignore: Vrai pour désactiver complètement la récupération.
+
+    Returns:
+        Un ``RecoveryResult`` (valeur nette de taxe, quantité absorbée/demandée).
+    """
+    demande = int(retour)
     if ignore or quote_fs is None or not quote_fs.has_buy_offer:
-        return 0.0
-    return market.apply_instant_sell_tax(retour * quote_fs.buy_price_max)
+        return market.RecoveryResult(valeur=0.0, absorbe=0, demande=demande)
+    profondeur = int(volume_fs.total_volume_24h) if volume_fs is not None else 0
+    book = [(float(quote_fs.buy_price_max), profondeur)]
+    return market.compute_recovery_value(retour, book)
 
 
 def _evaluate_sales(
@@ -156,34 +179,39 @@ def _evaluate_sales(
     quantity: int,
     now: datetime,
     params: OptimizerParams,
-) -> SalesScenario | None:
-    """Évalue les scénarios A/B pour une ville de vente et retient le meilleur."""
+) -> VenteBlock | None:
+    """Évalue les deux scénarios de vente d'une ville et les retourne côte à côte.
+
+    Contrairement à la V1.0, aucun des deux n'est masqué : le scénario A est le
+    revenu safe, le scénario B le potentiel conditionnel (SPEC_FIX section 3).
+
+    Côté vente, une donnée périmée n'exclut plus la ville : elle est escomptée
+    par le facteur de confiance fraîcheur, qui descend à 0.50 au-delà de 6h
+    (SPEC_FIX section 6). L'exclusion dure reste appliquée aux prix d'achat,
+    qui ne sont pas pondérés.
+
+    Returns:
+        Un ``VenteBlock``, ou ``None`` si le scénario A n'est pas exploitable
+        (sans buy order il n'existe pas de marge safe, donc pas de route).
+    """
     if output_quote is None:
         return None
 
-    candidates: list[SalesScenario] = []
-
     # Scénario A — instant sell (on remplit les buy orders).
     buy_age = output_quote.buy_max_age(now)
-    buy_fresh = market.classify_freshness(
-        buy_age, params.freshness_warning_hours, params.freshness_critical_hours
+    if not output_quote.has_buy_offer:
+        return None
+    scenario_a = market.evaluate_instant_sell(
+        output_quote.city,
+        float(output_quote.buy_price_max),
+        quantity,
+        data_age_hours=market.age_hours(buy_age),
     )
-    if buy_fresh != FreshnessLevel.CRITICAL and output_quote.has_buy_offer:
-        candidates.append(
-            market.evaluate_instant_sell(
-                output_quote.city,
-                float(output_quote.buy_price_max),
-                quantity,
-                data_age_hours=market.age_hours(buy_age),
-            )
-        )
 
     # Scénario B — sell order (on place un ordre sous-coté).
+    scenario_b: SalesScenario | None = None
     sell_age = output_quote.sell_min_age(now)
-    sell_fresh = market.classify_freshness(
-        sell_age, params.freshness_warning_hours, params.freshness_critical_hours
-    )
-    if sell_fresh != FreshnessLevel.CRITICAL and output_quote.has_sell_offer:
+    if output_quote.has_sell_offer:
         volume_24h = volume.total_volume_24h if volume is not None else 0.0
         scenario_b = market.evaluate_sell_order(
             output_quote.city,
@@ -193,11 +221,35 @@ def _evaluate_sales(
             undercut_pct=params.undercut_pct,
             data_age_hours=market.age_hours(sell_age),
         )
-        # Filtre : on écarte le scénario B si la fill probability est trop faible.
-        if scenario_b.fill_proba >= params.seuil_fill_probability_pct / 100.0:
-            candidates.append(scenario_b)
+        gain = scenario_b.expected_revenu - scenario_a.expected_revenu
+        scenario_b.gain_marginal_vs_a = gain
+        scenario_b.gain_marginal_pct = (
+            gain / scenario_a.expected_revenu * 100.0 if scenario_a.expected_revenu > 0 else None
+        )
 
-    return market.best_scenario(candidates)
+    return VenteBlock(
+        ville=output_quote.city,
+        scenario_a_instant_sell=scenario_a,
+        scenario_b_sell_order=scenario_b,
+        recommandation=market.recommend_strategy(
+            scenario_a,
+            scenario_b,
+            min_fill_proba=params.seuil_fill_probability_pct / 100.0,
+        ),
+    )
+
+
+def _annotate_margins(scenario: SalesScenario | None, cout_net: float) -> None:
+    """Renseigne bénéfice et marge d'un scénario une fois le coût net connu.
+
+    Args:
+        scenario: Scénario à annoter (ignoré s'il est ``None``).
+        cout_net: Coût net de la route (coût total moins récupération RRR).
+    """
+    if scenario is None:
+        return
+    scenario.benefice = scenario.expected_revenu - cout_net
+    scenario.marge_pct = scenario.benefice / cout_net * 100.0 if cout_net > 0 else _MARGE_INFINIE
 
 
 def _collect_warnings(
@@ -220,18 +272,18 @@ def _collect_warnings(
 def _build_route(
     params: OptimizerParams,
     wood_quote: PriceQuote,
-    plank_quote: PriceQuote,
+    plank_quote: PriceQuote | None,
     output_quote: PriceQuote,
     volume: VolumeData | None,
     quotes: QuoteIndex,
+    volumes: VolumeIndex,
     now: datetime,
 ) -> Route | None:
     """Évalue une combinaison complète et retourne une ``Route`` (ou ``None``)."""
     tier = params.tier
-    unit_gross = (
-        wood_quote.sell_price_min
-        + plank_quote.sell_price_min
-        + config.nutrition_per_unit(tier) * (params.station_rate / 100.0)
+    plank_price = float(plank_quote.sell_price_min) if plank_quote is not None else 0.0
+    unit_gross = refining.unit_gross_cost(
+        tier, float(wood_quote.sell_price_min), plank_price, params.station_rate
     )
     quantity = _resolve_quantity(params, unit_gross)
     if quantity <= 0:
@@ -249,43 +301,64 @@ def _build_route(
     if sale is None:
         return None
 
-    wood_leg = _make_leg("wood", tier, wood_quote, quantity, now, params)
-    plank_leg = _make_leg("plank", tier - 1, plank_quote, quantity, now, params)
+    wood_leg = _make_leg("wood", tier, wood_quote, refined.wood_utilise, now, params)
+    plank_leg = (
+        _make_leg("plank", tier - 1, plank_quote, refined.plank_moins_1_utilise, now, params)
+        if plank_quote is not None
+        else None
+    )
 
     cout_focus = refined.focus_utilise * params.cost_per_focus
-    cout_total = wood_leg.cout_total + plank_leg.cout_total + refined.cout_station + cout_focus
+    cout_plank = plank_leg.cout_total if plank_leg is not None else 0.0
+    cout_total = wood_leg.cout_total + cout_plank + refined.cout_station + cout_focus
 
     fs = config.REFINING_CITY
     recup_wood = _recuperation(
-        quotes.get((wood_quote.item_id, fs)), refined.wood_retour, params.ignore_recup
-    )
-    recup_plank = _recuperation(
-        quotes.get((plank_quote.item_id, fs)),
-        refined.plank_moins_1_retour,
+        quotes.get((wood_quote.item_id, fs)),
+        volumes.get((wood_quote.item_id, fs)),
+        refined.wood_retour,
         params.ignore_recup,
     )
-    recup_totale = recup_wood + recup_plank
+    recup_plank = (
+        _recuperation(
+            quotes.get((plank_quote.item_id, fs)),
+            volumes.get((plank_quote.item_id, fs)),
+            refined.plank_moins_1_retour,
+            params.ignore_recup,
+        )
+        if plank_quote is not None
+        else market.RecoveryResult(valeur=0.0, absorbe=0, demande=0)
+    )
+    recup_totale = recup_wood.valeur + recup_plank.valeur
     cout_net = cout_total - recup_totale
 
-    benefice = sale.expected_revenu - cout_net
-    marge_pct = benefice / cout_net * 100.0 if cout_net > 0 else _MARGE_INFINIE
+    scenario_a = sale.scenario_a_instant_sell
+    if scenario_a is None:  # pragma: no cover - garanti par _evaluate_sales
+        return None
+    _annotate_margins(scenario_a, cout_net)
+    _annotate_margins(sale.scenario_b_sell_order, cout_net)
+
+    # La marge « safe » (scénario A) pilote le tri et le filtrage (SPEC_FIX 3.5).
+    benefice = scenario_a.expected_revenu - cout_net
+    marge_pct = scenario_a.marge_pct if scenario_a.marge_pct is not None else _MARGE_INFINIE
+    scenario_b = sale.scenario_b_sell_order
     silver_par_focus = (
         benefice / refined.focus_utilise if params.focus and refined.focus_utilise > 0 else None
     )
 
     chosen_fresh = market.classify_freshness(
-        output_quote.buy_max_age(now)
-        if sale.strategy == SellStrategy.INSTANT_SELL
-        else output_quote.sell_min_age(now),
+        output_quote.buy_max_age(now),
         params.freshness_warning_hours,
         params.freshness_critical_hours,
     )
-    warnings = _collect_warnings(
-        {wood_quote.city, plank_quote.city, output_quote.city},
-        [wood_leg.freshness, plank_leg.freshness, chosen_fresh],
-        volume,
-        quantity,
-    )
+    cities = {wood_quote.city, output_quote.city}
+    legs_fresh = [wood_leg.freshness, chosen_fresh]
+    if plank_leg is not None:
+        cities.add(plank_leg.city)
+        legs_fresh.append(plank_leg.freshness)
+    warnings = _collect_warnings(cities, legs_fresh, volume, quantity)
+    if recup_wood.partielle or recup_plank.partielle:
+        warnings.append(WarningCode.RECUP_PARTIELLE)
 
     return Route(
         tier=tier,
@@ -294,14 +367,20 @@ def _build_route(
         achat_plank=plank_leg,
         raffinage=refined,
         vente=sale,
-        recup_wood=recup_wood,
-        recup_plank=recup_plank,
+        recup_wood=recup_wood.valeur,
+        recup_plank=recup_plank.valeur,
+        recup_wood_absorbe=recup_wood.absorbe,
+        recup_wood_demande=recup_wood.demande,
+        recup_plank_absorbe=recup_plank.absorbe,
+        recup_plank_demande=recup_plank.demande,
         recup_totale=recup_totale,
         cout_total=cout_total,
         cout_net=cout_net,
-        revenu_effectif=sale.expected_revenu,
+        revenu_effectif=scenario_a.expected_revenu,
         benefice=benefice,
         marge_pct=marge_pct,
+        benefice_b=scenario_b.benefice if scenario_b is not None else None,
+        marge_pct_b=scenario_b.marge_pct if scenario_b is not None else None,
         silver_par_focus=silver_par_focus,
         warnings=warnings,
     )
@@ -322,11 +401,18 @@ def _build_checklist(
     checklist: list[RefreshChecklistItem] = []
     for route in routes:
         pairs = [
-            (route.achat_wood.item_id, route.achat_wood.city),
-            (route.achat_plank.item_id, route.achat_plank.city),
-            (config.plank_item_id(route.tier), route.vente.city),
+            (
+                route.achat_wood.item_id,
+                route.achat_wood.city,
+                "critique, le prix du bois structure le coût",
+            ),
         ]
-        for item_id, city in pairs:
+        if route.achat_plank is not None:
+            pairs.append(
+                (route.achat_plank.item_id, route.achat_plank.city, "critique, prix du plank T-1")
+            )
+        pairs.append((config.plank_item_id(route.tier), route.vente.ville, "vente principale"))
+        for item_id, city, role in pairs:
             if (item_id, city) in seen:
                 continue
             seen.add((item_id, city))
@@ -342,6 +428,7 @@ def _build_checklist(
                         params.freshness_warning_hours,
                         params.freshness_critical_hours,
                     ),
+                    role=role,
                 )
             )
     return checklist
@@ -353,11 +440,14 @@ def _discarded_report(best_below: Route | None, params: OptimizerParams) -> Disc
         return None
     description = (
         f"Achat {best_below.achat_wood.city} → {config.REFINING_CITY} "
-        f"→ Vente {best_below.vente.city}"
+        f"→ Vente {best_below.vente.ville}"
     )
     return DiscardedRoute(
         description=description,
         marge_pct=round(best_below.marge_pct, 1),
+        marge_pct_b=(
+            round(best_below.marge_pct_b, 1) if best_below.marge_pct_b is not None else None
+        ),
         raison=f"marge {best_below.marge_pct:.1f}% < seuil {params.seuil_marge_min_pct:.0f}%",
         suggestions=[
             f"Baisser --seuil-marge à {math.floor(best_below.marge_pct)} pour voir cette route",
@@ -365,6 +455,46 @@ def _discarded_report(best_below: Route | None, params: OptimizerParams) -> Disc
             "Essayer un autre tier",
         ],
     )
+
+
+def _plank_input_item(tier: int) -> str | None:
+    """Retourne l'item ID du plank T-1 requis par la recette, ou ``None`` (T2)."""
+    if config.lower_plank_qty_per_plank(tier) == 0:
+        return None
+    return config.plank_item_id(tier - 1)
+
+
+def _plank_input_candidates(
+    params: OptimizerParams,
+    quotes: QuoteIndex,
+    plank_input_item: str | None,
+    now: datetime,
+) -> list[PriceQuote | None]:
+    """Liste les quotes de plank T-1 exploitables pour la phase 2 de sourcing.
+
+    Si la recette du tier ne consomme aucun plank T-1 (cas du T2), la phase 2
+    est court-circuitée : on retourne une unique branche ``None``.
+
+    Args:
+        params: Paramètres du run.
+        quotes: Index des prix par ``(item_id, ville)``.
+        plank_input_item: Item ID du plank T-1.
+        now: Instant de référence pour la fraîcheur.
+
+    Returns:
+        La liste des quotes candidates, ou ``[None]`` si aucun plank n'est requis.
+    """
+    if plank_input_item is None:
+        return [None]
+    candidates: list[PriceQuote | None] = []
+    for plank_city in params.buy_cities():
+        quote = quotes.get((plank_input_item, plank_city))
+        if quote is None or not quote.has_sell_offer:
+            continue
+        if _leg_is_critical(quote, now, params):
+            continue
+        candidates.append(quote)
+    return candidates
 
 
 def optimize(
@@ -389,7 +519,7 @@ def optimize(
     volumes = _index_volumes(volumes_list)
 
     wood_item = config.wood_item_id(params.tier)
-    plank_input_item = config.plank_item_id(params.tier - 1)
+    plank_input_item = _plank_input_item(params.tier)
     output_item = config.plank_item_id(params.tier)
 
     candidates: list[Route] = []
@@ -399,12 +529,7 @@ def optimize(
             continue
         if _leg_is_critical(wood_quote, now, params):
             continue
-        for plank_city in params.buy_cities():
-            plank_quote = quotes.get((plank_input_item, plank_city))
-            if plank_quote is None or not plank_quote.has_sell_offer:
-                continue
-            if _leg_is_critical(plank_quote, now, params):
-                continue
+        for plank_quote in _plank_input_candidates(params, quotes, plank_input_item, now):
             for sell_city in params.sell_cities():
                 output_quote = quotes.get((output_item, sell_city))
                 if output_quote is None:
@@ -416,6 +541,7 @@ def optimize(
                     output_quote,
                     volumes.get((output_item, sell_city)),
                     quotes,
+                    volumes,
                     now,
                 )
                 if route is not None:
@@ -476,12 +602,16 @@ async def run_optimization(
     # AODP fournit des timestamps UTC naïfs : on aligne notre référence dessus.
     reference = now or datetime.now(tz=UTC).replace(tzinfo=None)
     wood_item = config.wood_item_id(params.tier)
-    plank_input_item = config.plank_item_id(params.tier - 1)
+    plank_input_item = _plank_input_item(params.tier)
     output_item = config.plank_item_id(params.tier)
 
+    items = [item for item in (wood_item, plank_input_item, output_item) if item is not None]
     all_buy = sorted(set(params.buy_cities()) | set(params.sell_cities()))
+    # Les volumes servent à la fill probability (planks de sortie) et à estimer
+    # la profondeur des buy orders pour la récupération RRR (inputs à FS).
+    history_cities = sorted({*params.sell_cities(), config.REFINING_CITY})
     async with AodpClient(server=server, use_cache=use_cache) as client:
-        quotes = await client.get_prices([wood_item, plank_input_item, output_item], all_buy)
-        volumes = await client.get_history([output_item], params.sell_cities())
+        quotes = await client.get_prices(items, all_buy)
+        volumes = await client.get_history(items, history_cities)
 
     return optimize(params, quotes, volumes, reference)

@@ -52,6 +52,7 @@ class WarningCode(StrEnum):
     ROUTE_ZONE_ROUGE = "ROUTE_ZONE_ROUGE"
     PROFONDEUR_INCERTAINE = "PROFONDEUR_INCERTAINE"
     DATA_JAUNE = "DATA_JAUNE"
+    RECUP_PARTIELLE = "RECUP_PARTIELLE"
 
 
 # Date sentinelle renvoyée par l'AODP quand aucune donnée n'existe.
@@ -128,6 +129,8 @@ class RefiningResult(BaseModel):
     """Résultat d'un raffinage (formules SPEC sections 7.1, 7.2, 3.4)."""
 
     planks_produits: int
+    wood_utilise: int
+    plank_moins_1_utilise: int
     wood_retour: float
     plank_moins_1_retour: float
     cout_station: float
@@ -139,7 +142,8 @@ class SalesScenario(BaseModel):
     """Évaluation d'un scénario de vente pour une ville donnée.
 
     ``expected_revenu`` vaut ``revenu_net`` en instant sell et
-    ``revenu_net × fill_proba`` en sell order.
+    ``revenu_net × fill_proba`` en sell order. ``marge_pct`` est renseignée par
+    l'optimiseur une fois le coût net de la route connu.
     """
 
     strategy: SellStrategy
@@ -148,10 +152,35 @@ class SalesScenario(BaseModel):
     prix_unitaire_ref: float
     revenu_brut: float
     revenu_net: float
+    # Escompte appliqué au revenu selon l'âge de la donnée de prix (SPEC_FIX 6).
+    freshness_factor: float = 1.0
+    revenu_net_pondere: float = 0.0
     fill_proba: float
     expected_revenu: float
     stack_suffisant: bool
     data_age_hours: float | None = None
+    # Certitude qualitative : « haute » en instant sell (revenu immédiat),
+    # « moyenne » en sell order (conditionnel au remplissage de l'ordre).
+    certitude: str = "haute"
+    marge_pct: float | None = None
+    benefice: float | None = None
+    # Scénario B uniquement : écart d'espérance de revenu face au scénario A.
+    gain_marginal_vs_a: float | None = None
+    gain_marginal_pct: float | None = None
+
+
+class VenteBlock(BaseModel):
+    """Les deux scénarios de vente d'une ville, présentés côte à côte.
+
+    La V1.0 ne retenait que le meilleur des deux, ce qui masquait le scénario A
+    (instant sell) alors que c'est l'option « safe ». On expose désormais
+    toujours les deux et on laisse l'utilisateur arbitrer (SPEC_FIX section 3).
+    """
+
+    ville: str
+    scenario_a_instant_sell: SalesScenario | None = None
+    scenario_b_sell_order: SalesScenario | None = None
+    recommandation: str = "instant_sell"
 
 
 class SourcingLeg(BaseModel):
@@ -175,17 +204,29 @@ class Route(BaseModel):
     tier: int
     quantite: int
     achat_wood: SourcingLeg
-    achat_plank: SourcingLeg
+    # ``None`` quand la recette ne consomme pas de plank T-1 (cas du T2).
+    achat_plank: SourcingLeg | None = None
     raffinage: RefiningResult
-    vente: SalesScenario
+    vente: VenteBlock
     recup_wood: float
     recup_plank: float
+    # Quantités réellement absorbées par les buy orders de la ville de raffinage
+    # face aux quantités retournées par le RRR (walk du carnet, SPEC_FIX 5).
+    recup_wood_absorbe: int = 0
+    recup_wood_demande: int = 0
+    recup_plank_absorbe: int = 0
+    recup_plank_demande: int = 0
     recup_totale: float
     cout_total: float
     cout_net: float
+    # Toutes les valeurs « safe » ci-dessous proviennent du scénario A
+    # (instant sell) : c'est sur elles que portent le tri et le seuil de marge.
     revenu_effectif: float
     benefice: float
     marge_pct: float
+    # Potentiel du scénario B (sell order), pondéré par la fill probability.
+    benefice_b: float | None = None
+    marge_pct_b: float | None = None
     silver_par_focus: float | None = None
     warnings: list[WarningCode] = Field(default_factory=list)
 
@@ -197,6 +238,8 @@ class RefreshChecklistItem(BaseModel):
     item_id: str
     age_hours: float | None
     freshness: FreshnessLevel
+    # Rôle de la donnée dans la route, pour prioriser les rafraîchissements.
+    role: str = ""
 
 
 class DiscardedRoute(BaseModel):
@@ -204,6 +247,8 @@ class DiscardedRoute(BaseModel):
 
     description: str
     marge_pct: float | None
+    # Marge du scénario B, pour aider l'utilisateur à arbitrer son seuil.
+    marge_pct_b: float | None = None
     raison: str
     suggestions: list[str] = Field(default_factory=list)
 

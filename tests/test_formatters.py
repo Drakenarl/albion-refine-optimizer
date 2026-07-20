@@ -25,7 +25,7 @@ def _sample_result() -> OptimizationResult:
     when = datetime(2026, 7, 19, 15, 0, 0)
     quotes = [
         _quote("T4_WOOD", "Martlock", sell=100, when=when),
-        _quote("T3_PLANKS", "Martlock", sell=200, when=when),
+        _quote("T3_PLANKS", "Martlock", sell=100, when=when),
         _quote("T4_PLANKS", "Caerleon", sell=600, buy=500, when=when),
     ]
     volumes = [VolumeData(item_id="T4_PLANKS", city="Caerleon", total_volume_24h=1000)]
@@ -61,6 +61,35 @@ class TestFormatJson:
         assert len(payload["routes"]) >= 1
 
 
+class TestDoubleScenario:
+    def test_json_export_has_both_scenarios(self) -> None:
+        payload = json.loads(formatters.format_json(_sample_result()))
+        vente = payload["routes"][0]["vente"]
+        assert vente["scenario_a_instant_sell"] is not None
+        assert vente["scenario_b_sell_order"] is not None
+        assert vente["recommandation"] in {"instant_sell", "sell_order", "au_choix"}
+        assert vente["scenario_a_instant_sell"]["certitude"] == "haute"
+        assert vente["scenario_b_sell_order"]["certitude"] == "moyenne"
+        assert vente["scenario_b_sell_order"]["gain_marginal_vs_a"] is not None
+
+    def test_output_shows_both_scenarios(self) -> None:
+        console = Console(record=True, width=120)
+        formatters.render_report(_sample_result(), console)
+        text = console.export_text()
+        assert "INSTANT SELL (safe)" in text
+        assert "SELL ORDER (attente)" in text
+        assert "fill proba" in text
+        assert "RECOMMANDATION" in text
+
+    def test_route_title_uses_scenario_a_margin(self) -> None:
+        result = _sample_result()
+        route = result.routes[0]
+        console = Console(record=True, width=120)
+        formatters.render_report(result, console)
+        text = console.export_text()
+        assert f"Marge nette (safe) : {route.marge_pct:.1f}%" in text
+
+
 class TestRenderReport:
     def test_render_does_not_crash(self) -> None:
         result = _sample_result()
@@ -69,6 +98,8 @@ class TestRenderReport:
         text = console.export_text()
         assert "TOP 1" in text
         assert "CHECK-LIST" in text
+        assert "CONSEILS TRADING" in text
+        assert "vente principale" in text
         # La route passe par Caerleon → flag zone rouge attendu.
         assert "ZONE ROUGE" in text
 

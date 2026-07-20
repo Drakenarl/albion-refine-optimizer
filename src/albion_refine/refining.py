@@ -59,6 +59,72 @@ def station_cost(quantity: int, tier: int, station_rate: float) -> float:
     return quantity * config.nutrition_per_unit(tier) * (station_rate / 100.0)
 
 
+def input_quantities(tier: int, planks: int) -> tuple[int, int]:
+    """Calcule les quantités d'inputs nécessaires pour produire ``planks`` unités.
+
+    Applique la recette réelle (SPEC_FIX section 1.2) : pour un plank T7 il faut
+    5 bois T7 et 1 plank T6, pas 1 et 1 comme le supposait la V1.0.
+
+    Args:
+        tier: Tier du plank produit (2 à 8).
+        planks: Nombre de planks à produire.
+
+    Returns:
+        Un tuple ``(bois nécessaire, planks T-1 nécessaires)``. Le second vaut 0
+        pour le T2, qui n'a pas d'input plank.
+    """
+    wood_qty, lower_qty = config.plank_recipe(tier)
+    return planks * wood_qty, planks * lower_qty
+
+
+def compute_input_cost(
+    tier: int,
+    planks: int,
+    wood_price: float,
+    lower_plank_price: float,
+) -> float:
+    """Calcule le coût d'achat des inputs pour produire ``planks`` unités.
+
+    Args:
+        tier: Tier du plank produit.
+        planks: Nombre de planks à produire.
+        wood_price: Prix unitaire du bois T{tier}.
+        lower_plank_price: Prix unitaire du plank T{tier-1} (ignoré si la
+            recette n'en consomme pas).
+
+    Returns:
+        Le coût total d'achat des inputs, en silver.
+    """
+    wood_needed, lower_needed = input_quantities(tier, planks)
+    return wood_needed * wood_price + lower_needed * lower_plank_price
+
+
+def unit_gross_cost(
+    tier: int,
+    wood_price: float,
+    lower_plank_price: float,
+    station_rate: float,
+) -> float:
+    """Calcule le coût brut de production d'UN plank (inputs + station).
+
+    Formule SPEC_FIX section 2.5 : ``(wood_qty × prix_bois) +
+    (lower_plank_qty × prix_plank_T-1) + coût_station_unitaire``. Utilisée par
+    le mode ``capital`` pour dimensionner la quantité maximale finançable.
+
+    Args:
+        tier: Tier du plank produit.
+        wood_price: Prix unitaire du bois T{tier}.
+        lower_plank_price: Prix unitaire du plank T{tier-1}.
+        station_rate: Rate de la station en silver par 100 nutrition.
+
+    Returns:
+        Le coût brut d'un plank produit, en silver.
+    """
+    return compute_input_cost(tier, 1, wood_price, lower_plank_price) + station_cost(
+        1, tier, station_rate
+    )
+
+
 def focus_used(quantity: int) -> float:
     """Estime le focus consommé pour raffiner ``quantity`` unités.
 
@@ -86,23 +152,29 @@ def refine(
     Combine le RRR (formule 7.1), les outputs (formule 7.2) et le coût de
     station (formule 3.4).
 
+    Le RRR s'applique à **chaque unité d'input consommée** (SPEC_FIX 2.3) :
+    pour 100 planks T7 on consomme 500 bois et 100 planks T6, donc le retour
+    bois est ``500 × RRR`` et non ``100 × RRR``.
+
     Args:
-        quantity: Nombre d'unités de bois (= nombre de planks produits).
+        quantity: Nombre de planks produits (= nombre d'actions de raffinage).
         tier: Tier du plank produit (4 à 8).
         focus: Vrai si le focus est activé.
         daily_bonus_pct: Bonus quotidien (0, 10 ou 20).
         station_rate: Rate de la station en silver par 100 nutrition.
 
     Returns:
-        Un ``RefiningResult`` avec planks produits, retours RRR sur les deux
-        inputs, coût de station, RRR effectif et focus consommé.
+        Un ``RefiningResult`` avec planks produits, inputs consommés, retours
+        RRR sur les deux inputs, coût de station, RRR effectif et focus consommé.
     """
     rrr = compute_rrr(focus, daily_bonus_pct)
-    retour = quantity * rrr
+    wood_needed, lower_needed = input_quantities(tier, quantity)
     return RefiningResult(
         planks_produits=quantity,
-        wood_retour=retour,
-        plank_moins_1_retour=retour,
+        wood_utilise=wood_needed,
+        plank_moins_1_utilise=lower_needed,
+        wood_retour=wood_needed * rrr,
+        plank_moins_1_retour=lower_needed * rrr,
         cout_station=station_cost(quantity, tier, station_rate),
         rrr_effectif=rrr,
         focus_utilise=focus_used(quantity) if focus else 0.0,
