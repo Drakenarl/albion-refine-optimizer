@@ -78,9 +78,13 @@ class TestControlledRoute:
         # Scénario B : listing 594 × 100 = 59400, net = 51678.
         assert scenario_b.strategy == SellStrategy.SELL_ORDER
         assert scenario_b.revenu_net == pytest.approx(51678.0)
-        assert route.marge_pct_b == pytest.approx(28.69, abs=0.01)
-        assert scenario_b.gain_marginal_vs_a == pytest.approx(5678.0)
-        assert route.vente.recommandation == "sell_order"
+        # Fill proba realiste : 0.85 × 0.85 = 0.7225 → espérance 37 337 s.
+        assert scenario_b.fill_proba == pytest.approx(0.7225)
+        assert scenario_b.expected_revenu == pytest.approx(37337.355)
+        assert route.marge_pct_b == pytest.approx(-7.02, abs=0.01)
+        assert scenario_b.gain_marginal_vs_a == pytest.approx(-8662.645)
+        # Le sell order rapporte moins en espérance : on reste sur l'instant sell.
+        assert route.vente.recommandation == "instant_sell"
 
     def test_title_margin_is_scenario_a(self) -> None:
         route = self._run().routes[0]
@@ -89,7 +93,7 @@ class TestControlledRoute:
         # La marge affichée est celle du scénario A, pas la meilleure des deux.
         assert route.marge_pct == pytest.approx(scenario_a.marge_pct)
         assert route.marge_pct_b is not None
-        assert route.marge_pct_b > route.marge_pct
+        assert route.marge_pct_b != pytest.approx(route.marge_pct)
 
 
 class TestScenarioAFiltering:

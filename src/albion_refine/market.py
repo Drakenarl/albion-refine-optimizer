@@ -124,21 +124,73 @@ def apply_sell_order_tax(gross: float) -> float:
 # ---------------------------------------------------------------------------
 
 
-def fill_probability(volume_24h: float, planks: int) -> float:
-    """Estime la probabilité qu'un sell order soit rempli sous 24h.
+# Plafond dur : un sell order n'est jamais certain d'être rempli sous 24h.
+FILL_PROBABILITY_CAP: float = 0.85
 
-    Approximation V1 : ``min(1.0, volume_24h / planks)`` (SPEC 7.7).
+
+def estimate_position_in_book(listing_price: float, top_sell_order_price: float) -> int:
+    """Estime la position de notre ordre dans le carnet de vente.
+
+    L'endpoint ``/prices`` de l'AODP ne donne que le meilleur sell order, pas la
+    profondeur. Approximation conservative de la V1.1 (SPEC_FIX 4.3) : si on
+    sous-cote le top on devient premier, sinon on suppose être enterré en 3e
+    position. La vraie profondeur est une amélioration V2.
 
     Args:
-        volume_24h: Volume échangé sur 24h dans la ville de vente.
-        planks: Quantité de planks à écouler.
+        listing_price: Prix auquel on compte lister.
+        top_sell_order_price: Prix du meilleur sell order actuel.
 
     Returns:
-        Une probabilité entre 0 et 1. Vaut 0 si le volume ou la quantité est nul.
+        La position estimée (1 ou 3).
     """
-    if planks <= 0 or volume_24h <= 0:
+    return 1 if listing_price <= top_sell_order_price else 3
+
+
+def compute_fill_probability(
+    quantity_to_sell: int,
+    volume_24h: float,
+    position_in_book: int,
+    listing_price: float,
+    top_sell_order_price: float,
+) -> float:
+    """Estime la probabilité qu'un sell order soit rempli sous 24h.
+
+    Remplace la formule naïve ``min(1, volume / quantité)`` de la V1.0, qui
+    renvoyait 100% dès que le volume dépassait la quantité (SPEC_FIX section 4).
+    Trois facteurs se combinent : le ratio volume/quantité (plafonné), la
+    position dans le carnet et la compétitivité du prix de listing.
+
+    Args:
+        quantity_to_sell: Quantité de planks à écouler.
+        volume_24h: Volume échangé sur 24h dans la ville de vente.
+        position_in_book: Nombre d'ordres empilés au-dessus (1 = nouveau top).
+        listing_price: Prix auquel on liste.
+        top_sell_order_price: Prix du meilleur sell order actuel.
+
+    Returns:
+        Une probabilité entre 0 et ``FILL_PROBABILITY_CAP`` (jamais 100%).
+    """
+    if volume_24h <= 0 or top_sell_order_price <= 0:
         return 0.0
-    return min(1.0, volume_24h / planks)
+
+    # Facteur 1 : ratio volume/quantité, plafonné bien en dessous de 100%.
+    ratio = volume_24h / max(quantity_to_sell, 1)
+    volume_factor = min(FILL_PROBABILITY_CAP, ratio * 0.6)
+
+    # Facteur 2 : position dans le carnet (plus on est enterré, pire c'est).
+    position_penalty = max(0.3, 1.0 - (position_in_book * 0.15))
+
+    # Facteur 3 : compétitivité du prix de listing.
+    undercut_pct = (top_sell_order_price - listing_price) / top_sell_order_price
+    if undercut_pct < 0:
+        price_factor = 0.5  # plus cher que le top : très mauvais
+    elif undercut_pct < 0.005:
+        price_factor = 0.7  # undercut < 0.5% : peu compétitif
+    else:
+        price_factor = 1.0
+
+    proba = volume_factor * position_penalty * price_factor
+    return min(FILL_PROBABILITY_CAP, max(0.0, proba))
 
 
 # ---------------------------------------------------------------------------
@@ -234,7 +286,13 @@ def evaluate_sell_order(
     prix_listing = min_sell_price * (1.0 - undercut_pct / 100.0)
     revenu_brut = prix_listing * planks
     revenu_net_if_filled = apply_sell_order_tax(revenu_brut)
-    proba = fill_probability(volume_24h, planks)
+    proba = compute_fill_probability(
+        quantity_to_sell=planks,
+        volume_24h=volume_24h,
+        position_in_book=estimate_position_in_book(prix_listing, min_sell_price),
+        listing_price=prix_listing,
+        top_sell_order_price=min_sell_price,
+    )
     return SalesScenario(
         certitude="moyenne",
         strategy=SellStrategy.SELL_ORDER,

@@ -87,17 +87,92 @@ class TestTaxes:
 
 
 class TestFillProbability:
-    def test_capped_at_one(self) -> None:
-        assert market.fill_probability(1000, 100) == 1.0
+    """Formule à trois facteurs (SPEC_FIX section 4)."""
 
-    def test_partial(self) -> None:
-        assert market.fill_probability(50, 100) == pytest.approx(0.5)
+    def test_fill_proba_never_exceeds_85_pct(self) -> None:
+        proba = market.compute_fill_probability(
+            quantity_to_sell=1,
+            volume_24h=1_000_000,
+            position_in_book=1,
+            listing_price=990.0,
+            top_sell_order_price=1000.0,
+        )
+        assert proba <= market.FILL_PROBABILITY_CAP
+
+    def test_fill_proba_penalized_when_not_top(self) -> None:
+        commun = {
+            "quantity_to_sell": 128,
+            "volume_24h": 300.0,
+            "listing_price": 990.0,
+            "top_sell_order_price": 1000.0,
+        }
+        top = market.compute_fill_probability(position_in_book=1, **commun)
+        enterre = market.compute_fill_probability(position_in_book=3, **commun)
+        assert enterre < top
+        assert enterre == pytest.approx(top * (0.55 / 0.85))
+
+    def test_fill_proba_penalized_when_price_worse_than_book(self) -> None:
+        # Lister plus cher que le top applique un price_factor de 0.5.
+        proba = market.compute_fill_probability(
+            quantity_to_sell=128,
+            volume_24h=300.0,
+            position_in_book=3,
+            listing_price=1010.0,
+            top_sell_order_price=1000.0,
+        )
+        reference = market.compute_fill_probability(
+            quantity_to_sell=128,
+            volume_24h=300.0,
+            position_in_book=3,
+            listing_price=990.0,
+            top_sell_order_price=1000.0,
+        )
+        assert proba == pytest.approx(reference * 0.5)
+
+    def test_timid_undercut_is_penalized(self) -> None:
+        proba = market.compute_fill_probability(
+            quantity_to_sell=128,
+            volume_24h=300.0,
+            position_in_book=1,
+            listing_price=999.0,  # undercut 0.1% < 0.5%
+            top_sell_order_price=1000.0,
+        )
+        assert proba == pytest.approx(0.85 * 0.85 * 0.7)
+
+    def test_fill_proba_realistic_for_high_volume_case(self) -> None:
+        # 128 unités, volume 300/jour, undercut de 1% : ni 100%, ni négligeable.
+        proba = market.compute_fill_probability(
+            quantity_to_sell=128,
+            volume_24h=300.0,
+            position_in_book=1,
+            listing_price=990.0,
+            top_sell_order_price=1000.0,
+        )
+        assert 0.6 <= proba <= 0.8
 
     def test_zero_volume(self) -> None:
-        assert market.fill_probability(0, 100) == 0.0
+        assert market.compute_fill_probability(100, 0.0, 1, 990.0, 1000.0) == 0.0
 
-    def test_zero_planks(self) -> None:
-        assert market.fill_probability(100, 0) == 0.0
+    def test_no_reference_price(self) -> None:
+        assert market.compute_fill_probability(100, 500.0, 1, 990.0, 0.0) == 0.0
+
+    def test_low_volume_stays_low(self) -> None:
+        proba = market.compute_fill_probability(
+            quantity_to_sell=5000,
+            volume_24h=300.0,
+            position_in_book=1,
+            listing_price=990.0,
+            top_sell_order_price=1000.0,
+        )
+        assert proba < 0.05
+
+
+class TestPositionInBook:
+    def test_undercut_makes_us_top(self) -> None:
+        assert market.estimate_position_in_book(990.0, 1000.0) == 1
+
+    def test_overpriced_is_buried(self) -> None:
+        assert market.estimate_position_in_book(1010.0, 1000.0) == 3
 
 
 class TestInstantSell:
@@ -126,13 +201,15 @@ class TestSellOrder:
         assert scenario.prix_unitaire_ref == pytest.approx(prix_listing)
         assert scenario.revenu_brut == pytest.approx(prix_listing * 100)
         assert scenario.revenu_net == pytest.approx(prix_listing * 100 * 0.87)
-        assert scenario.fill_proba == 1.0  # volume 200 >= 100
-        assert scenario.expected_revenu == pytest.approx(scenario.revenu_net)
+        # volume 200 / 100 unités, top du carnet, undercut 1% : 0.85 × 0.85 × 1.0
+        assert scenario.fill_proba == pytest.approx(0.7225)
+        assert scenario.expected_revenu == pytest.approx(scenario.revenu_net * 0.7225)
 
     def test_low_volume_reduces_expected(self) -> None:
         scenario = market.evaluate_sell_order("Lymhurst", 1500.0, 200, volume_24h=100)
-        assert scenario.fill_proba == pytest.approx(0.5)
-        assert scenario.expected_revenu == pytest.approx(scenario.revenu_net * 0.5)
+        # ratio 0.5 → volume_factor 0.3, puis pénalité de position 0.85.
+        assert scenario.fill_proba == pytest.approx(0.255)
+        assert scenario.expected_revenu == pytest.approx(scenario.revenu_net * 0.255)
 
     def test_no_sell_reference(self) -> None:
         scenario = market.evaluate_sell_order("Thetford", 0.0, 100, volume_24h=200)
