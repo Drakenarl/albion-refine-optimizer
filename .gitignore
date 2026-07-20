@@ -132,3 +132,7 @@ todo.md
 *.key
 secrets.json
 credentials.json
+
+# Sorties de run locales
+result.json
+result.txt
