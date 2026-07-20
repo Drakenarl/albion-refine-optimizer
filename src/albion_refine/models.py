@@ -247,6 +247,8 @@ class DiscardedRoute(BaseModel):
 
     description: str
     marge_pct: float | None
+    # Marge du scénario B, pour aider l'utilisateur à arbitrer son seuil.
+    marge_pct_b: float | None = None
     raison: str
     suggestions: list[str] = Field(default_factory=list)
 

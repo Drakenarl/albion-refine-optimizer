@@ -185,19 +185,21 @@ def _evaluate_sales(
     Contrairement à la V1.0, aucun des deux n'est masqué : le scénario A est le
     revenu safe, le scénario B le potentiel conditionnel (SPEC_FIX section 3).
 
+    Côté vente, une donnée périmée n'exclut plus la ville : elle est escomptée
+    par le facteur de confiance fraîcheur, qui descend à 0.50 au-delà de 6h
+    (SPEC_FIX section 6). L'exclusion dure reste appliquée aux prix d'achat,
+    qui ne sont pas pondérés.
+
     Returns:
         Un ``VenteBlock``, ou ``None`` si le scénario A n'est pas exploitable
-        (sans buy order frais il n'existe pas de marge safe, donc pas de route).
+        (sans buy order il n'existe pas de marge safe, donc pas de route).
     """
     if output_quote is None:
         return None
 
     # Scénario A — instant sell (on remplit les buy orders).
     buy_age = output_quote.buy_max_age(now)
-    buy_fresh = market.classify_freshness(
-        buy_age, params.freshness_warning_hours, params.freshness_critical_hours
-    )
-    if buy_fresh == FreshnessLevel.CRITICAL or not output_quote.has_buy_offer:
+    if not output_quote.has_buy_offer:
         return None
     scenario_a = market.evaluate_instant_sell(
         output_quote.city,
@@ -209,10 +211,7 @@ def _evaluate_sales(
     # Scénario B — sell order (on place un ordre sous-coté).
     scenario_b: SalesScenario | None = None
     sell_age = output_quote.sell_min_age(now)
-    sell_fresh = market.classify_freshness(
-        sell_age, params.freshness_warning_hours, params.freshness_critical_hours
-    )
-    if sell_fresh != FreshnessLevel.CRITICAL and output_quote.has_sell_offer:
+    if output_quote.has_sell_offer:
         volume_24h = volume.total_volume_24h if volume is not None else 0.0
         scenario_b = market.evaluate_sell_order(
             output_quote.city,
@@ -446,6 +445,9 @@ def _discarded_report(best_below: Route | None, params: OptimizerParams) -> Disc
     return DiscardedRoute(
         description=description,
         marge_pct=round(best_below.marge_pct, 1),
+        marge_pct_b=(
+            round(best_below.marge_pct_b, 1) if best_below.marge_pct_b is not None else None
+        ),
         raison=f"marge {best_below.marge_pct:.1f}% < seuil {params.seuil_marge_min_pct:.0f}%",
         suggestions=[
             f"Baisser --seuil-marge à {math.floor(best_below.marge_pct)} pour voir cette route",

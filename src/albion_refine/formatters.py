@@ -290,7 +290,9 @@ def _render_no_routes(result: OptimizationResult, console: Console) -> None:
     console.print("Meilleure route trouvée :", style="bold")
     console.print(f"  {discarded.description}")
     if discarded.marge_pct is not None:
-        console.print(f"  Marge : {discarded.marge_pct:.1f}%")
+        console.print(f"  Marge scénario A (instant sell) : {discarded.marge_pct:.1f}%")
+    if discarded.marge_pct_b is not None:
+        console.print(f"  Marge scénario B (sell order)   : {discarded.marge_pct_b:.1f}%")
     console.print(f"  Écartée car : {discarded.raison}")
     console.print("Suggestions :", style="bold")
     for suggestion in discarded.suggestions:
