@@ -63,11 +63,69 @@ class TestControlledRoute:
         assert route.achat_plank is not None
         assert route.achat_plank.quantite == 100
         assert route.cout_net == pytest.approx(40157.5)
-        # Sell order gagne : listing 594, net = 59400*0.87 = 51678
-        assert route.vente.strategy == SellStrategy.SELL_ORDER
-        assert route.revenu_effectif == pytest.approx(51678.0)
-        assert route.benefice == pytest.approx(11520.5)
-        assert route.marge_pct == pytest.approx(28.69, abs=0.01)
+        # Scénario A (safe) : top buy 500 × 100 = 50000, net = 46000.
+        scenario_a = route.vente.scenario_a_instant_sell
+        assert scenario_a is not None
+        assert scenario_a.strategy == SellStrategy.INSTANT_SELL
+        assert route.revenu_effectif == pytest.approx(46000.0)
+        assert route.benefice == pytest.approx(5842.5)
+        assert route.marge_pct == pytest.approx(14.55, abs=0.01)
+
+    def test_both_scenarios_present(self) -> None:
+        route = self._run().routes[0]
+        scenario_b = route.vente.scenario_b_sell_order
+        assert scenario_b is not None
+        # Scénario B : listing 594 × 100 = 59400, net = 51678.
+        assert scenario_b.strategy == SellStrategy.SELL_ORDER
+        assert scenario_b.revenu_net == pytest.approx(51678.0)
+        assert route.marge_pct_b == pytest.approx(28.69, abs=0.01)
+        assert scenario_b.gain_marginal_vs_a == pytest.approx(5678.0)
+        assert route.vente.recommandation == "sell_order"
+
+    def test_title_margin_is_scenario_a(self) -> None:
+        route = self._run().routes[0]
+        scenario_a = route.vente.scenario_a_instant_sell
+        assert scenario_a is not None
+        # La marge affichée est celle du scénario A, pas la meilleure des deux.
+        assert route.marge_pct == pytest.approx(scenario_a.marge_pct)
+        assert route.marge_pct_b is not None
+        assert route.marge_pct_b > route.marge_pct
+
+
+class TestScenarioAFiltering:
+    """Le seuil de marge porte sur le scénario A (SPEC_FIX 3.5 / 3.6)."""
+
+    def _run(self, seuil: float) -> optimizer.OptimizationResult:
+        now = datetime(2026, 7, 19, 15, 20, 0)
+        when = datetime(2026, 7, 19, 15, 0, 0)
+        quotes = [
+            _quote("T4_WOOD", "Martlock", sell=100, when=when),
+            _quote("T3_PLANKS", "Martlock", sell=200, when=when),
+            # Spread énorme : marge A ~15%, marge B ~29%.
+            _quote("T4_PLANKS", "Lymhurst", sell=600, buy=500, when=when),
+        ]
+        volumes = [VolumeData(item_id="T4_PLANKS", city="Lymhurst", total_volume_24h=1000)]
+        params = OptimizerParams(
+            tier=4,
+            mode=QuantityMode.FIXED,
+            quantite=100,
+            station_rate=100,
+            ignore_recup=True,
+            seuil_marge_min_pct=seuil,
+        )
+        return optimize(params, quotes, volumes, now)
+
+    def test_filter_uses_scenario_a_margin(self) -> None:
+        # Marge A ~14.5% < 20% alors que la marge B ~28.7% la dépasse :
+        # la route doit être écartée sur le critère safe.
+        assert self._run(seuil=20).routes == []
+        assert self._run(seuil=10).routes != []
+
+    def test_discarded_report_exposes_margin(self) -> None:
+        result = self._run(seuil=20)
+        assert result.discarded_best is not None
+        assert result.discarded_best.marge_pct is not None
+        assert result.discarded_best.marge_pct < 20
 
 
 class TestFixtureIntegration:
@@ -120,7 +178,8 @@ class TestFixtureIntegration:
     ) -> None:
         result = optimize(self._params(), prices_t7, history_t7, now_ref)
         for route in result.routes:
-            cities = {route.achat_wood.city, route.achat_plank.city, route.vente.city}
+            assert route.achat_plank is not None
+            cities = {route.achat_wood.city, route.achat_plank.city, route.vente.ville}
             if "Caerleon" in cities:
                 assert WarningCode.ROUTE_ZONE_ROUGE in route.warnings
 

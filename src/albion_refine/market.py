@@ -181,6 +181,7 @@ def evaluate_instant_sell(
         )
     revenu_net = apply_instant_sell_tax(walk.total_cost)
     return SalesScenario(
+        certitude="haute",
         strategy=SellStrategy.INSTANT_SELL,
         city=city,
         planks=planks,
@@ -235,6 +236,7 @@ def evaluate_sell_order(
     revenu_net_if_filled = apply_sell_order_tax(revenu_brut)
     proba = fill_probability(volume_24h, planks)
     return SalesScenario(
+        certitude="moyenne",
         strategy=SellStrategy.SELL_ORDER,
         city=city,
         planks=planks,
@@ -246,6 +248,47 @@ def evaluate_sell_order(
         stack_suffisant=True,
         data_age_hours=data_age_hours,
     )
+
+
+# Écart d'espérance de revenu au-delà duquel le sell order vaut le risque
+# d'attente et d'undercut (SPEC_FIX section 3 : « gain marginal insuffisant »).
+SEUIL_GAIN_MARGINAL_PCT: float = 10.0
+
+
+def recommend_strategy(
+    scenario_a: SalesScenario | None,
+    scenario_b: SalesScenario | None,
+    *,
+    min_fill_proba: float = 0.0,
+) -> str:
+    """Recommande une stratégie de vente en comparant les deux scénarios.
+
+    Args:
+        scenario_a: Scénario instant sell (revenu immédiat), ou ``None``.
+        scenario_b: Scénario sell order (revenu conditionnel), ou ``None``.
+        min_fill_proba: Fill probability minimale sous laquelle le sell order
+            n'est jamais recommandé.
+
+    Returns:
+        ``"instant_sell"``, ``"sell_order"`` ou ``"au_choix"`` quand le gain
+        marginal du sell order reste sous ``SEUIL_GAIN_MARGINAL_PCT``.
+    """
+    b_viable = (
+        scenario_b is not None
+        and scenario_b.stack_suffisant
+        and scenario_b.fill_proba >= min_fill_proba
+    )
+    if scenario_a is None or not scenario_a.stack_suffisant:
+        return "sell_order" if b_viable else "instant_sell"
+    if not b_viable or scenario_b is None:
+        return "instant_sell"
+
+    gain = scenario_b.expected_revenu - scenario_a.expected_revenu
+    if gain <= 0:
+        return "instant_sell"
+    if gain > scenario_a.expected_revenu * SEUIL_GAIN_MARGINAL_PCT / 100.0:
+        return "sell_order"
+    return "au_choix"
 
 
 def best_scenario(scenarios: list[SalesScenario]) -> SalesScenario | None:

@@ -141,7 +141,8 @@ class SalesScenario(BaseModel):
     """Évaluation d'un scénario de vente pour une ville donnée.
 
     ``expected_revenu`` vaut ``revenu_net`` en instant sell et
-    ``revenu_net × fill_proba`` en sell order.
+    ``revenu_net × fill_proba`` en sell order. ``marge_pct`` est renseignée par
+    l'optimiseur une fois le coût net de la route connu.
     """
 
     strategy: SellStrategy
@@ -154,6 +155,28 @@ class SalesScenario(BaseModel):
     expected_revenu: float
     stack_suffisant: bool
     data_age_hours: float | None = None
+    # Certitude qualitative : « haute » en instant sell (revenu immédiat),
+    # « moyenne » en sell order (conditionnel au remplissage de l'ordre).
+    certitude: str = "haute"
+    marge_pct: float | None = None
+    benefice: float | None = None
+    # Scénario B uniquement : écart d'espérance de revenu face au scénario A.
+    gain_marginal_vs_a: float | None = None
+    gain_marginal_pct: float | None = None
+
+
+class VenteBlock(BaseModel):
+    """Les deux scénarios de vente d'une ville, présentés côte à côte.
+
+    La V1.0 ne retenait que le meilleur des deux, ce qui masquait le scénario A
+    (instant sell) alors que c'est l'option « safe ». On expose désormais
+    toujours les deux et on laisse l'utilisateur arbitrer (SPEC_FIX section 3).
+    """
+
+    ville: str
+    scenario_a_instant_sell: SalesScenario | None = None
+    scenario_b_sell_order: SalesScenario | None = None
+    recommandation: str = "instant_sell"
 
 
 class SourcingLeg(BaseModel):
@@ -180,15 +203,20 @@ class Route(BaseModel):
     # ``None`` quand la recette ne consomme pas de plank T-1 (cas du T2).
     achat_plank: SourcingLeg | None = None
     raffinage: RefiningResult
-    vente: SalesScenario
+    vente: VenteBlock
     recup_wood: float
     recup_plank: float
     recup_totale: float
     cout_total: float
     cout_net: float
+    # Toutes les valeurs « safe » ci-dessous proviennent du scénario A
+    # (instant sell) : c'est sur elles que portent le tri et le seuil de marge.
     revenu_effectif: float
     benefice: float
     marge_pct: float
+    # Potentiel du scénario B (sell order), pondéré par la fill probability.
+    benefice_b: float | None = None
+    marge_pct_b: float | None = None
     silver_par_focus: float | None = None
     warnings: list[WarningCode] = Field(default_factory=list)
 

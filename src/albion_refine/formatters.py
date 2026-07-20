@@ -17,6 +17,7 @@ from albion_refine.models import (
     FreshnessLevel,
     OptimizationResult,
     Route,
+    SalesScenario,
     SellStrategy,
     WarningCode,
 )
@@ -31,6 +32,12 @@ _FRESHNESS_ICON: dict[FreshnessLevel, tuple[str, str]] = {
 _STRATEGY_LABEL: dict[SellStrategy, str] = {
     SellStrategy.INSTANT_SELL: "INSTANT SELL",
     SellStrategy.SELL_ORDER: "SELL ORDER",
+}
+
+_RECO_LABEL: dict[str, str] = {
+    "instant_sell": "INSTANT SELL (gain marginal du sell order insuffisant)",
+    "sell_order": "SELL ORDER (gain marginal significatif)",
+    "au_choix": "AU CHOIX (les deux scénarios se valent)",
 }
 
 
@@ -51,6 +58,60 @@ def fmt_age(age_hours: float | None) -> str:
 def freshness_icon(level: FreshnessLevel) -> str:
     """Retourne l'icône associée à un niveau de fraîcheur."""
     return _FRESHNESS_ICON[level][0]
+
+
+def _marge_color(marge_pct: float) -> str:
+    """Retourne la couleur associée à une marge safe (SPEC_FIX section 7.2)."""
+    if marge_pct > 50:
+        return "green"
+    if marge_pct >= 20:
+        return "yellow"
+    return "red"
+
+
+def _append_scenario_a(body: Text, scenario: SalesScenario | None) -> None:
+    """Ajoute le bloc du scénario A (instant sell) au corps du panneau."""
+    body.append("► INSTANT SELL (safe)\n", style="bold")
+    if scenario is None:  # pragma: no cover - une route sans A n'est pas construite
+        body.append("      indisponible (aucun buy order exploitable)\n", style="dim")
+        return
+    body.append(f"      top buy {scenario.prix_unitaire_ref:.0f} s × {scenario.planks} unités\n")
+    body.append(f"      revenu net       : {fmt_silver(scenario.revenu_net)}\n")
+    if scenario.marge_pct is not None:
+        body.append(f"      marge            : {scenario.marge_pct:.1f}%\n")
+
+
+def _append_scenario_b(body: Text, scenario: SalesScenario | None) -> None:
+    """Ajoute le bloc du scénario B (sell order) au corps du panneau."""
+    style = "dim" if scenario is not None and scenario.fill_proba < 0.4 else ""
+    body.append("► SELL ORDER (attente)\n", style="bold")
+    if scenario is None:
+        body.append("      indisponible (aucun sell order exploitable)\n", style="dim")
+        return
+    body.append(
+        f"      undercut à {scenario.prix_unitaire_ref:.0f} s | "
+        f"fill proba {scenario.fill_proba * 100:.0f}%\n",
+        style=style,
+    )
+    body.append(
+        f"      revenu si rempli : {fmt_silver(scenario.revenu_net)}\n",
+        style=style,
+    )
+    body.append(
+        f"      espérance        : {fmt_silver(scenario.expected_revenu)}\n",
+        style=style,
+    )
+    if scenario.marge_pct is not None:
+        body.append(f"      marge espérée    : {scenario.marge_pct:.1f}%\n", style=style)
+    if scenario.gain_marginal_vs_a is not None:
+        signe = "+" if scenario.gain_marginal_vs_a >= 0 else ""
+        detail = ""
+        if scenario.gain_marginal_pct is not None:
+            detail = f" ({signe}{scenario.gain_marginal_pct:.1f}%)"
+        body.append(
+            f"      gain vs instant  : {signe}{fmt_silver(scenario.gain_marginal_vs_a)}{detail}\n",
+            style=style,
+        )
 
 
 def _route_panel(route: Route) -> Panel:
@@ -89,17 +150,11 @@ def _route_panel(route: Route) -> Panel:
     if refined.focus_utilise > 0:
         body.append(f"FOCUS : {refined.focus_utilise:.0f}\n")
 
-    # Vente.
-    vente = route.vente
+    # Vente — les deux scénarios sont toujours affichés côte à côte.
     body.append("\n")
-    body.append(
-        f"VENTE ► {_STRATEGY_LABEL[vente.strategy]} @ {vente.city}\n",
-        style="bold cyan",
-    )
-    body.append(f"        prix réf {vente.prix_unitaire_ref:.0f} s")
-    if vente.strategy == SellStrategy.SELL_ORDER:
-        body.append(f" | fill proba {vente.fill_proba * 100:.0f}%")
-    body.append(f"\n        revenu net : {fmt_silver(vente.revenu_net)}\n")
+    body.append(f"VENTE @ {route.vente.ville}\n", style="bold cyan")
+    _append_scenario_a(body, route.vente.scenario_a_instant_sell)
+    _append_scenario_b(body, route.vente.scenario_b_sell_order)
 
     if WarningCode.ROUTE_ZONE_ROUGE in route.warnings:
         body.append("        ⚠ ROUTE PAR ZONE ROUGE\n", style="bold red")
@@ -112,17 +167,28 @@ def _route_panel(route: Route) -> Panel:
     body.append("\n")
     if route.recup_totale > 0:
         body.append(f"RÉCUP (retours)  : {fmt_silver(route.recup_totale)}\n", style="green")
-    body.append(f"COÛT NET         : {fmt_silver(route.cout_net)}\n")
-    body.append(f"REVENU EFFECTIF  : {fmt_silver(route.revenu_effectif)}\n")
+    body.append(f"COÛT NET (safe)  : {fmt_silver(route.cout_net)}\n")
     benefice_style = "bold green" if route.benefice >= 0 else "bold red"
     sign = "+" if route.benefice >= 0 else ""
-    body.append(f"BÉNÉFICE         : {sign}{fmt_silver(route.benefice)}\n", style=benefice_style)
+    body.append(f"BÉNÉFICE SAFE    : {sign}{fmt_silver(route.benefice)}\n", style=benefice_style)
+    if route.benefice_b is not None:
+        signe_b = "+" if route.benefice_b >= 0 else ""
+        body.append(
+            f"POTENTIEL SO     : {signe_b}{fmt_silver(route.benefice_b)} (espérance sell order)\n",
+            style="dim",
+        )
     if route.silver_par_focus is not None:
         body.append(f"SILVER / FOCUS   : {route.silver_par_focus:.2f} s\n")
+    body.append(
+        f"RECOMMANDATION   : {_RECO_LABEL.get(route.vente.recommandation, '?')}\n",
+        style="bold",
+    )
 
-    title = f"TOP {route.rank} — Marge nette : {route.marge_pct:.1f}%"
+    title = f"TOP {route.rank} — Marge nette (safe) : {route.marge_pct:.1f}%"
+    if route.marge_pct_b is not None:
+        title += f" — potentiel jusqu'à {route.marge_pct_b:.1f}%"
     subtitle = f"TIER {route.tier} PLANKS — {route.quantite} unités"
-    return Panel(body, title=title, subtitle=subtitle, border_style="cyan")
+    return Panel(body, title=title, subtitle=subtitle, border_style=_marge_color(route.marge_pct))
 
 
 def render_report(result: OptimizationResult, console: Console | None = None) -> None:

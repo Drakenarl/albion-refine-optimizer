@@ -29,8 +29,8 @@ from albion_refine.models import (
     Route,
     RunMetadata,
     SalesScenario,
-    SellStrategy,
     SourcingLeg,
+    VenteBlock,
     VolumeData,
     WarningCode,
 )
@@ -156,29 +156,35 @@ def _evaluate_sales(
     quantity: int,
     now: datetime,
     params: OptimizerParams,
-) -> SalesScenario | None:
-    """Évalue les scénarios A/B pour une ville de vente et retient le meilleur."""
+) -> VenteBlock | None:
+    """Évalue les deux scénarios de vente d'une ville et les retourne côte à côte.
+
+    Contrairement à la V1.0, aucun des deux n'est masqué : le scénario A est le
+    revenu safe, le scénario B le potentiel conditionnel (SPEC_FIX section 3).
+
+    Returns:
+        Un ``VenteBlock``, ou ``None`` si le scénario A n'est pas exploitable
+        (sans buy order frais il n'existe pas de marge safe, donc pas de route).
+    """
     if output_quote is None:
         return None
-
-    candidates: list[SalesScenario] = []
 
     # Scénario A — instant sell (on remplit les buy orders).
     buy_age = output_quote.buy_max_age(now)
     buy_fresh = market.classify_freshness(
         buy_age, params.freshness_warning_hours, params.freshness_critical_hours
     )
-    if buy_fresh != FreshnessLevel.CRITICAL and output_quote.has_buy_offer:
-        candidates.append(
-            market.evaluate_instant_sell(
-                output_quote.city,
-                float(output_quote.buy_price_max),
-                quantity,
-                data_age_hours=market.age_hours(buy_age),
-            )
-        )
+    if buy_fresh == FreshnessLevel.CRITICAL or not output_quote.has_buy_offer:
+        return None
+    scenario_a = market.evaluate_instant_sell(
+        output_quote.city,
+        float(output_quote.buy_price_max),
+        quantity,
+        data_age_hours=market.age_hours(buy_age),
+    )
 
     # Scénario B — sell order (on place un ordre sous-coté).
+    scenario_b: SalesScenario | None = None
     sell_age = output_quote.sell_min_age(now)
     sell_fresh = market.classify_freshness(
         sell_age, params.freshness_warning_hours, params.freshness_critical_hours
@@ -193,11 +199,35 @@ def _evaluate_sales(
             undercut_pct=params.undercut_pct,
             data_age_hours=market.age_hours(sell_age),
         )
-        # Filtre : on écarte le scénario B si la fill probability est trop faible.
-        if scenario_b.fill_proba >= params.seuil_fill_probability_pct / 100.0:
-            candidates.append(scenario_b)
+        gain = scenario_b.expected_revenu - scenario_a.expected_revenu
+        scenario_b.gain_marginal_vs_a = gain
+        scenario_b.gain_marginal_pct = (
+            gain / scenario_a.expected_revenu * 100.0 if scenario_a.expected_revenu > 0 else None
+        )
 
-    return market.best_scenario(candidates)
+    return VenteBlock(
+        ville=output_quote.city,
+        scenario_a_instant_sell=scenario_a,
+        scenario_b_sell_order=scenario_b,
+        recommandation=market.recommend_strategy(
+            scenario_a,
+            scenario_b,
+            min_fill_proba=params.seuil_fill_probability_pct / 100.0,
+        ),
+    )
+
+
+def _annotate_margins(scenario: SalesScenario | None, cout_net: float) -> None:
+    """Renseigne bénéfice et marge d'un scénario une fois le coût net connu.
+
+    Args:
+        scenario: Scénario à annoter (ignoré s'il est ``None``).
+        cout_net: Coût net de la route (coût total moins récupération RRR).
+    """
+    if scenario is None:
+        return
+    scenario.benefice = scenario.expected_revenu - cout_net
+    scenario.marge_pct = scenario.benefice / cout_net * 100.0 if cout_net > 0 else _MARGE_INFINIE
 
 
 def _collect_warnings(
@@ -275,16 +305,22 @@ def _build_route(
     recup_totale = recup_wood + recup_plank
     cout_net = cout_total - recup_totale
 
-    benefice = sale.expected_revenu - cout_net
-    marge_pct = benefice / cout_net * 100.0 if cout_net > 0 else _MARGE_INFINIE
+    scenario_a = sale.scenario_a_instant_sell
+    if scenario_a is None:  # pragma: no cover - garanti par _evaluate_sales
+        return None
+    _annotate_margins(scenario_a, cout_net)
+    _annotate_margins(sale.scenario_b_sell_order, cout_net)
+
+    # La marge « safe » (scénario A) pilote le tri et le filtrage (SPEC_FIX 3.5).
+    benefice = scenario_a.expected_revenu - cout_net
+    marge_pct = scenario_a.marge_pct if scenario_a.marge_pct is not None else _MARGE_INFINIE
+    scenario_b = sale.scenario_b_sell_order
     silver_par_focus = (
         benefice / refined.focus_utilise if params.focus and refined.focus_utilise > 0 else None
     )
 
     chosen_fresh = market.classify_freshness(
-        output_quote.buy_max_age(now)
-        if sale.strategy == SellStrategy.INSTANT_SELL
-        else output_quote.sell_min_age(now),
+        output_quote.buy_max_age(now),
         params.freshness_warning_hours,
         params.freshness_critical_hours,
     )
@@ -307,9 +343,11 @@ def _build_route(
         recup_totale=recup_totale,
         cout_total=cout_total,
         cout_net=cout_net,
-        revenu_effectif=sale.expected_revenu,
+        revenu_effectif=scenario_a.expected_revenu,
         benefice=benefice,
         marge_pct=marge_pct,
+        benefice_b=scenario_b.benefice if scenario_b is not None else None,
+        marge_pct_b=scenario_b.marge_pct if scenario_b is not None else None,
         silver_par_focus=silver_par_focus,
         warnings=warnings,
     )
@@ -332,7 +370,7 @@ def _build_checklist(
         pairs = [(route.achat_wood.item_id, route.achat_wood.city)]
         if route.achat_plank is not None:
             pairs.append((route.achat_plank.item_id, route.achat_plank.city))
-        pairs.append((config.plank_item_id(route.tier), route.vente.city))
+        pairs.append((config.plank_item_id(route.tier), route.vente.ville))
         for item_id, city in pairs:
             if (item_id, city) in seen:
                 continue
@@ -360,7 +398,7 @@ def _discarded_report(best_below: Route | None, params: OptimizerParams) -> Disc
         return None
     description = (
         f"Achat {best_below.achat_wood.city} → {config.REFINING_CITY} "
-        f"→ Vente {best_below.vente.city}"
+        f"→ Vente {best_below.vente.ville}"
     )
     return DiscardedRoute(
         description=description,
