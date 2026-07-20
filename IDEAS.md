@@ -30,6 +30,12 @@ Notes prises pendant l'implémentation de la V1. **Rien de ceci n'est implément
   que le sell order sera rempli — ce qui n'est pas garanti à court terme.
   Actuellement l'outil masque cette info en ne retenant que le meilleur des
   deux.
+- **Calibration réelle observée sur T7 Planks (20/07/2026)** :
+  - Lymhurst : sell 12 340 / buy 10 924 (spread 11.5%)
+  - Fort Sterling : sell 12 154 / buy 10 501 (spread 13.6%)
+  - Prix moyen 24h stable ~12 060 s
+  - La marge "sell order" affichée par V1 (150.5%) est conditionnelle,
+    la marge "instant sell" réelle est ~137%. V2 doit afficher les deux.
 
 ## V3
 

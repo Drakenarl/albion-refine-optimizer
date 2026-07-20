@@ -20,8 +20,8 @@ def _sample_result() -> OptimizationResult:
     now = datetime(2026, 7, 19, 15, 20, 0)
     when = datetime(2026, 7, 19, 15, 0, 0)
     quotes = [
-        _quote("T7_WOOD", "Martlock", sell=245, when=when),
-        _quote("T6_PLANKS", "Fort Sterling", sell=500, when=when),
+        _quote("T7_WOOD", "Martlock", sell=100, when=when),
+        _quote("T6_PLANKS", "Fort Sterling", sell=400, when=when),
         _quote("T7_PLANKS", "Caerleon", sell=1520, buy=1420, when=when),
     ]
     volumes = [VolumeData(item_id="T7_PLANKS", city="Caerleon", total_volume_24h=2000)]

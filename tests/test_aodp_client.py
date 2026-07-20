@@ -50,7 +50,7 @@ class TestGetPrices:
         async with AodpClient(cache_dir=tmp_path, use_cache=False) as client:
             quotes = await client.get_prices(["T7_WOOD"], ["Martlock"])
         martlock_wood = next(q for q in quotes if q.item_id == "T7_WOOD" and q.city == "Martlock")
-        assert martlock_wood.sell_price_min == 245
+        assert martlock_wood.sell_price_min == 135
         assert martlock_wood.has_sell_offer is True
 
     async def test_uses_cache_on_second_call(

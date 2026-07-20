@@ -68,14 +68,15 @@ def _route_panel(route: Route) -> Panel:
     body.append(
         f"                 fraîcheur : {fmt_age(wood.data_age_hours)} {icon}\n", style=color
     )
-    body.append(
-        f"ACHAT PLANK T{plank.tier}  {plank.city:<14} "
-        f"{plank.prix_unitaire:.0f} s × {plank.quantite} = {fmt_silver(plank.cout_total)}\n"
-    )
-    icon, color = _FRESHNESS_ICON[plank.freshness]
-    body.append(
-        f"                 fraîcheur : {fmt_age(plank.data_age_hours)} {icon}\n", style=color
-    )
+    if plank is not None:
+        body.append(
+            f"ACHAT PLANK T{plank.tier}  {plank.city:<14} "
+            f"{plank.prix_unitaire:.0f} s × {plank.quantite} = {fmt_silver(plank.cout_total)}\n"
+        )
+        icon, color = _FRESHNESS_ICON[plank.freshness]
+        body.append(
+            f"                 fraîcheur : {fmt_age(plank.data_age_hours)} {icon}\n", style=color
+        )
 
     # Raffinage.
     refined = route.raffinage

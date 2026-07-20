@@ -48,6 +48,7 @@ class TestControlledRoute:
             focus=False,
             ignore_recup=True,
             undercut_pct=1.0,
+            seuil_marge_min_pct=0,
         )
         return optimize(params, quotes, volumes, now)
 
@@ -56,13 +57,17 @@ class TestControlledRoute:
         assert len(result.routes) == 1
         route = result.routes[0]
         assert route.rank == 1
-        # Coût net = 100*100 + 100*200 + 100*1.575*1.0 = 30157.5
-        assert route.cout_net == pytest.approx(30157.5)
+        # Recette T4 : 2 bois + 1 plank T3 par unité.
+        # Coût net = (200*100) + (100*200) + 100*1.575*1.0 = 40157.5
+        assert route.achat_wood.quantite == 200
+        assert route.achat_plank is not None
+        assert route.achat_plank.quantite == 100
+        assert route.cout_net == pytest.approx(40157.5)
         # Sell order gagne : listing 594, net = 59400*0.87 = 51678
         assert route.vente.strategy == SellStrategy.SELL_ORDER
         assert route.revenu_effectif == pytest.approx(51678.0)
-        assert route.benefice == pytest.approx(21520.5)
-        assert route.marge_pct == pytest.approx(71.36, abs=0.01)
+        assert route.benefice == pytest.approx(11520.5)
+        assert route.marge_pct == pytest.approx(28.69, abs=0.01)
 
 
 class TestFixtureIntegration:

@@ -220,7 +220,7 @@ def _collect_warnings(
 def _build_route(
     params: OptimizerParams,
     wood_quote: PriceQuote,
-    plank_quote: PriceQuote,
+    plank_quote: PriceQuote | None,
     output_quote: PriceQuote,
     volume: VolumeData | None,
     quotes: QuoteIndex,
@@ -228,10 +228,9 @@ def _build_route(
 ) -> Route | None:
     """Évalue une combinaison complète et retourne une ``Route`` (ou ``None``)."""
     tier = params.tier
-    unit_gross = (
-        wood_quote.sell_price_min
-        + plank_quote.sell_price_min
-        + config.nutrition_per_unit(tier) * (params.station_rate / 100.0)
+    plank_price = float(plank_quote.sell_price_min) if plank_quote is not None else 0.0
+    unit_gross = refining.unit_gross_cost(
+        tier, float(wood_quote.sell_price_min), plank_price, params.station_rate
     )
     quantity = _resolve_quantity(params, unit_gross)
     if quantity <= 0:
@@ -249,20 +248,29 @@ def _build_route(
     if sale is None:
         return None
 
-    wood_leg = _make_leg("wood", tier, wood_quote, quantity, now, params)
-    plank_leg = _make_leg("plank", tier - 1, plank_quote, quantity, now, params)
+    wood_leg = _make_leg("wood", tier, wood_quote, refined.wood_utilise, now, params)
+    plank_leg = (
+        _make_leg("plank", tier - 1, plank_quote, refined.plank_moins_1_utilise, now, params)
+        if plank_quote is not None
+        else None
+    )
 
     cout_focus = refined.focus_utilise * params.cost_per_focus
-    cout_total = wood_leg.cout_total + plank_leg.cout_total + refined.cout_station + cout_focus
+    cout_plank = plank_leg.cout_total if plank_leg is not None else 0.0
+    cout_total = wood_leg.cout_total + cout_plank + refined.cout_station + cout_focus
 
     fs = config.REFINING_CITY
     recup_wood = _recuperation(
         quotes.get((wood_quote.item_id, fs)), refined.wood_retour, params.ignore_recup
     )
-    recup_plank = _recuperation(
-        quotes.get((plank_quote.item_id, fs)),
-        refined.plank_moins_1_retour,
-        params.ignore_recup,
+    recup_plank = (
+        _recuperation(
+            quotes.get((plank_quote.item_id, fs)),
+            refined.plank_moins_1_retour,
+            params.ignore_recup,
+        )
+        if plank_quote is not None
+        else 0.0
     )
     recup_totale = recup_wood + recup_plank
     cout_net = cout_total - recup_totale
@@ -280,12 +288,12 @@ def _build_route(
         params.freshness_warning_hours,
         params.freshness_critical_hours,
     )
-    warnings = _collect_warnings(
-        {wood_quote.city, plank_quote.city, output_quote.city},
-        [wood_leg.freshness, plank_leg.freshness, chosen_fresh],
-        volume,
-        quantity,
-    )
+    cities = {wood_quote.city, output_quote.city}
+    legs_fresh = [wood_leg.freshness, chosen_fresh]
+    if plank_leg is not None:
+        cities.add(plank_leg.city)
+        legs_fresh.append(plank_leg.freshness)
+    warnings = _collect_warnings(cities, legs_fresh, volume, quantity)
 
     return Route(
         tier=tier,
@@ -321,11 +329,10 @@ def _build_checklist(
     seen: set[tuple[str, str]] = set()
     checklist: list[RefreshChecklistItem] = []
     for route in routes:
-        pairs = [
-            (route.achat_wood.item_id, route.achat_wood.city),
-            (route.achat_plank.item_id, route.achat_plank.city),
-            (config.plank_item_id(route.tier), route.vente.city),
-        ]
+        pairs = [(route.achat_wood.item_id, route.achat_wood.city)]
+        if route.achat_plank is not None:
+            pairs.append((route.achat_plank.item_id, route.achat_plank.city))
+        pairs.append((config.plank_item_id(route.tier), route.vente.city))
         for item_id, city in pairs:
             if (item_id, city) in seen:
                 continue
@@ -367,6 +374,46 @@ def _discarded_report(best_below: Route | None, params: OptimizerParams) -> Disc
     )
 
 
+def _plank_input_item(tier: int) -> str | None:
+    """Retourne l'item ID du plank T-1 requis par la recette, ou ``None`` (T2)."""
+    if config.lower_plank_qty_per_plank(tier) == 0:
+        return None
+    return config.plank_item_id(tier - 1)
+
+
+def _plank_input_candidates(
+    params: OptimizerParams,
+    quotes: QuoteIndex,
+    plank_input_item: str | None,
+    now: datetime,
+) -> list[PriceQuote | None]:
+    """Liste les quotes de plank T-1 exploitables pour la phase 2 de sourcing.
+
+    Si la recette du tier ne consomme aucun plank T-1 (cas du T2), la phase 2
+    est court-circuitée : on retourne une unique branche ``None``.
+
+    Args:
+        params: Paramètres du run.
+        quotes: Index des prix par ``(item_id, ville)``.
+        plank_input_item: Item ID du plank T-1.
+        now: Instant de référence pour la fraîcheur.
+
+    Returns:
+        La liste des quotes candidates, ou ``[None]`` si aucun plank n'est requis.
+    """
+    if plank_input_item is None:
+        return [None]
+    candidates: list[PriceQuote | None] = []
+    for plank_city in params.buy_cities():
+        quote = quotes.get((plank_input_item, plank_city))
+        if quote is None or not quote.has_sell_offer:
+            continue
+        if _leg_is_critical(quote, now, params):
+            continue
+        candidates.append(quote)
+    return candidates
+
+
 def optimize(
     params: OptimizerParams,
     quotes_list: list[PriceQuote],
@@ -389,7 +436,7 @@ def optimize(
     volumes = _index_volumes(volumes_list)
 
     wood_item = config.wood_item_id(params.tier)
-    plank_input_item = config.plank_item_id(params.tier - 1)
+    plank_input_item = _plank_input_item(params.tier)
     output_item = config.plank_item_id(params.tier)
 
     candidates: list[Route] = []
@@ -399,12 +446,7 @@ def optimize(
             continue
         if _leg_is_critical(wood_quote, now, params):
             continue
-        for plank_city in params.buy_cities():
-            plank_quote = quotes.get((plank_input_item, plank_city))
-            if plank_quote is None or not plank_quote.has_sell_offer:
-                continue
-            if _leg_is_critical(plank_quote, now, params):
-                continue
+        for plank_quote in _plank_input_candidates(params, quotes, plank_input_item, now):
             for sell_city in params.sell_cities():
                 output_quote = quotes.get((output_item, sell_city))
                 if output_quote is None:
@@ -476,12 +518,13 @@ async def run_optimization(
     # AODP fournit des timestamps UTC naïfs : on aligne notre référence dessus.
     reference = now or datetime.now(tz=UTC).replace(tzinfo=None)
     wood_item = config.wood_item_id(params.tier)
-    plank_input_item = config.plank_item_id(params.tier - 1)
+    plank_input_item = _plank_input_item(params.tier)
     output_item = config.plank_item_id(params.tier)
 
+    items = [item for item in (wood_item, plank_input_item, output_item) if item is not None]
     all_buy = sorted(set(params.buy_cities()) | set(params.sell_cities()))
     async with AodpClient(server=server, use_cache=use_cache) as client:
-        quotes = await client.get_prices([wood_item, plank_input_item, output_item], all_buy)
+        quotes = await client.get_prices(items, all_buy)
         volumes = await client.get_history([output_item], params.sell_cities())
 
     return optimize(params, quotes, volumes, reference)

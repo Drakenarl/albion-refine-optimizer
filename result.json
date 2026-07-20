@@ -1,0 +1,367 @@
+﻿{
+  "run_metadata": {
+    "timestamp": "2026-07-20T07:53:49.993288",
+    "tier": 7,
+    "mode": "fixed",
+    "params": {
+      "tier": 7,
+      "mode": "fixed",
+      "station_rate": 50.0,
+      "focus": false,
+      "daily_bonus_pct": 0,
+      "capital": null,
+      "quantite": 128,
+      "focus_available": null,
+      "cost_per_focus": 0.0,
+      "undercut_pct": 1.0,
+      "seuil_marge_min_pct": 30.0,
+      "seuil_fill_probability_pct": 20.0,
+      "freshness_warning_hours": 3.0,
+      "freshness_critical_hours": 6.0,
+      "excluded_buy_cities": [
+        "Brecilien"
+      ],
+      "excluded_sell_cities": [
+        "Brecilien"
+      ],
+      "ignore_recup": false,
+      "top_n": 5
+    }
+  },
+  "routes": [
+    {
+      "rank": 1,
+      "tier": 7,
+      "quantite": 128,
+      "achat_wood": {
+        "kind": "wood",
+        "item_id": "T7_WOOD",
+        "tier": 7,
+        "city": "Lymhurst",
+        "prix_unitaire": 3048.0,
+        "quantite": 128,
+        "cout_total": 390144.0,
+        "data_age_hours": 2.980553691111111,
+        "freshness": "fresh"
+      },
+      "achat_plank": {
+        "kind": "plank",
+        "item_id": "T6_PLANKS",
+        "tier": 6,
+        "city": "Bridgewatch",
+        "prix_unitaire": 3382.0,
+        "quantite": 128,
+        "cout_total": 432896.0,
+        "data_age_hours": 5.563887024444445,
+        "freshness": "warning"
+      },
+      "raffinage": {
+        "planks_produits": 128,
+        "wood_retour": 46.98734177215191,
+        "plank_moins_1_retour": 46.98734177215191,
+        "cout_station": 907.2,
+        "rrr_effectif": 0.3670886075949368,
+        "focus_utilise": 0.0
+      },
+      "vente": {
+        "strategy": "sell_order",
+        "city": "Lymhurst",
+        "planks": 128,
+        "prix_unitaire_ref": 12214.619999999999,
+        "revenu_brut": 1563471.3599999999,
+        "revenu_net": 1360220.0832,
+        "fill_proba": 1.0,
+        "expected_revenu": 1360220.0832,
+        "stack_suffisant": true,
+        "data_age_hours": 4.313887024444444
+      },
+      "recup_wood": 136817.74177215193,
+      "recup_plank": 136515.14329113928,
+      "recup_totale": 273332.8850632912,
+      "cout_total": 823947.2,
+      "cout_net": 550614.3149367088,
+      "revenu_effectif": 1360220.0832,
+      "benefice": 809605.7682632912,
+      "marge_pct": 147.0368180232206,
+      "silver_par_focus": null,
+      "warnings": [
+        "DATA_JAUNE"
+      ]
+    },
+    {
+      "rank": 2,
+      "tier": 7,
+      "quantite": 128,
+      "achat_wood": {
+        "kind": "wood",
+        "item_id": "T7_WOOD",
+        "tier": 7,
+        "city": "Lymhurst",
+        "prix_unitaire": 3048.0,
+        "quantite": 128,
+        "cout_total": 390144.0,
+        "data_age_hours": 2.980553691111111,
+        "freshness": "fresh"
+      },
+      "achat_plank": {
+        "kind": "plank",
+        "item_id": "T6_PLANKS",
+        "tier": 6,
+        "city": "Bridgewatch",
+        "prix_unitaire": 3382.0,
+        "quantite": 128,
+        "cout_total": 432896.0,
+        "data_age_hours": 5.563887024444445,
+        "freshness": "warning"
+      },
+      "raffinage": {
+        "planks_produits": 128,
+        "wood_retour": 46.98734177215191,
+        "plank_moins_1_retour": 46.98734177215191,
+        "cout_station": 907.2,
+        "rrr_effectif": 0.3670886075949368,
+        "focus_utilise": 0.0
+      },
+      "vente": {
+        "strategy": "sell_order",
+        "city": "Fort Sterling",
+        "planks": 128,
+        "prix_unitaire_ref": 12032.46,
+        "revenu_brut": 1540154.88,
+        "revenu_net": 1339934.7455999998,
+        "fill_proba": 1.0,
+        "expected_revenu": 1339934.7455999998,
+        "stack_suffisant": true,
+        "data_age_hours": 0.9805536911111111
+      },
+      "recup_wood": 136817.74177215193,
+      "recup_plank": 136515.14329113928,
+      "recup_totale": 273332.8850632912,
+      "cout_total": 823947.2,
+      "cout_net": 550614.3149367088,
+      "revenu_effectif": 1339934.7455999998,
+      "benefice": 789320.430663291,
+      "marge_pct": 143.3526897596225,
+      "silver_par_focus": null,
+      "warnings": [
+        "DATA_JAUNE"
+      ]
+    },
+    {
+      "rank": 3,
+      "tier": 7,
+      "quantite": 128,
+      "achat_wood": {
+        "kind": "wood",
+        "item_id": "T7_WOOD",
+        "tier": 7,
+        "city": "Lymhurst",
+        "prix_unitaire": 3048.0,
+        "quantite": 128,
+        "cout_total": 390144.0,
+        "data_age_hours": 2.980553691111111,
+        "freshness": "fresh"
+      },
+      "achat_plank": {
+        "kind": "plank",
+        "item_id": "T6_PLANKS",
+        "tier": 6,
+        "city": "Thetford",
+        "prix_unitaire": 3482.0,
+        "quantite": 128,
+        "cout_total": 445696.0,
+        "data_age_hours": 4.230553691111111,
+        "freshness": "warning"
+      },
+      "raffinage": {
+        "planks_produits": 128,
+        "wood_retour": 46.98734177215191,
+        "plank_moins_1_retour": 46.98734177215191,
+        "cout_station": 907.2,
+        "rrr_effectif": 0.3670886075949368,
+        "focus_utilise": 0.0
+      },
+      "vente": {
+        "strategy": "sell_order",
+        "city": "Lymhurst",
+        "planks": 128,
+        "prix_unitaire_ref": 12214.619999999999,
+        "revenu_brut": 1563471.3599999999,
+        "revenu_net": 1360220.0832,
+        "fill_proba": 1.0,
+        "expected_revenu": 1360220.0832,
+        "stack_suffisant": true,
+        "data_age_hours": 4.313887024444444
+      },
+      "recup_wood": 136817.74177215193,
+      "recup_plank": 136515.14329113928,
+      "recup_totale": 273332.8850632912,
+      "cout_total": 836747.2,
+      "cout_net": 563414.3149367088,
+      "revenu_effectif": 1360220.0832,
+      "benefice": 796805.7682632912,
+      "marge_pct": 141.42448055349828,
+      "silver_par_focus": null,
+      "warnings": [
+        "DATA_JAUNE"
+      ]
+    },
+    {
+      "rank": 4,
+      "tier": 7,
+      "quantite": 128,
+      "achat_wood": {
+        "kind": "wood",
+        "item_id": "T7_WOOD",
+        "tier": 7,
+        "city": "Lymhurst",
+        "prix_unitaire": 3048.0,
+        "quantite": 128,
+        "cout_total": 390144.0,
+        "data_age_hours": 2.980553691111111,
+        "freshness": "fresh"
+      },
+      "achat_plank": {
+        "kind": "plank",
+        "item_id": "T6_PLANKS",
+        "tier": 6,
+        "city": "Thetford",
+        "prix_unitaire": 3482.0,
+        "quantite": 128,
+        "cout_total": 445696.0,
+        "data_age_hours": 4.230553691111111,
+        "freshness": "warning"
+      },
+      "raffinage": {
+        "planks_produits": 128,
+        "wood_retour": 46.98734177215191,
+        "plank_moins_1_retour": 46.98734177215191,
+        "cout_station": 907.2,
+        "rrr_effectif": 0.3670886075949368,
+        "focus_utilise": 0.0
+      },
+      "vente": {
+        "strategy": "sell_order",
+        "city": "Fort Sterling",
+        "planks": 128,
+        "prix_unitaire_ref": 12032.46,
+        "revenu_brut": 1540154.88,
+        "revenu_net": 1339934.7455999998,
+        "fill_proba": 1.0,
+        "expected_revenu": 1339934.7455999998,
+        "stack_suffisant": true,
+        "data_age_hours": 0.9805536911111111
+      },
+      "recup_wood": 136817.74177215193,
+      "recup_plank": 136515.14329113928,
+      "recup_totale": 273332.8850632912,
+      "cout_total": 836747.2,
+      "cout_net": 563414.3149367088,
+      "revenu_effectif": 1339934.7455999998,
+      "benefice": 776520.430663291,
+      "marge_pct": 137.8240506279152,
+      "silver_par_focus": null,
+      "warnings": [
+        "DATA_JAUNE"
+      ]
+    },
+    {
+      "rank": 5,
+      "tier": 7,
+      "quantite": 128,
+      "achat_wood": {
+        "kind": "wood",
+        "item_id": "T7_WOOD",
+        "tier": 7,
+        "city": "Fort Sterling",
+        "prix_unitaire": 3410.0,
+        "quantite": 128,
+        "cout_total": 436480.0,
+        "data_age_hours": 0.9805536911111111,
+        "freshness": "fresh"
+      },
+      "achat_plank": {
+        "kind": "plank",
+        "item_id": "T6_PLANKS",
+        "tier": 6,
+        "city": "Bridgewatch",
+        "prix_unitaire": 3382.0,
+        "quantite": 128,
+        "cout_total": 432896.0,
+        "data_age_hours": 5.563887024444445,
+        "freshness": "warning"
+      },
+      "raffinage": {
+        "planks_produits": 128,
+        "wood_retour": 46.98734177215191,
+        "plank_moins_1_retour": 46.98734177215191,
+        "cout_station": 907.2,
+        "rrr_effectif": 0.3670886075949368,
+        "focus_utilise": 0.0
+      },
+      "vente": {
+        "strategy": "sell_order",
+        "city": "Lymhurst",
+        "planks": 128,
+        "prix_unitaire_ref": 12214.619999999999,
+        "revenu_brut": 1563471.3599999999,
+        "revenu_net": 1360220.0832,
+        "fill_proba": 1.0,
+        "expected_revenu": 1360220.0832,
+        "stack_suffisant": true,
+        "data_age_hours": 4.313887024444444
+      },
+      "recup_wood": 136817.74177215193,
+      "recup_plank": 136515.14329113928,
+      "recup_totale": 273332.8850632912,
+      "cout_total": 870283.2,
+      "cout_net": 596950.3149367088,
+      "revenu_effectif": 1360220.0832,
+      "benefice": 763269.7682632912,
+      "marge_pct": 127.86152367541952,
+      "silver_par_focus": null,
+      "warnings": [
+        "DATA_JAUNE"
+      ]
+    }
+  ],
+  "refresh_checklist": [
+    {
+      "city": "Lymhurst",
+      "item_id": "T7_WOOD",
+      "age_hours": 2.980553691111111,
+      "freshness": "fresh"
+    },
+    {
+      "city": "Bridgewatch",
+      "item_id": "T6_PLANKS",
+      "age_hours": 5.563887024444445,
+      "freshness": "warning"
+    },
+    {
+      "city": "Lymhurst",
+      "item_id": "T7_PLANKS",
+      "age_hours": 4.313887024444444,
+      "freshness": "warning"
+    },
+    {
+      "city": "Fort Sterling",
+      "item_id": "T7_PLANKS",
+      "age_hours": 0.9805536911111111,
+      "freshness": "fresh"
+    },
+    {
+      "city": "Thetford",
+      "item_id": "T6_PLANKS",
+      "age_hours": 4.230553691111111,
+      "freshness": "warning"
+    },
+    {
+      "city": "Fort Sterling",
+      "item_id": "T7_WOOD",
+      "age_hours": 0.9805536911111111,
+      "freshness": "fresh"
+    }
+  ],
+  "discarded_best": null
+}

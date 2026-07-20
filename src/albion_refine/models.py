@@ -128,6 +128,8 @@ class RefiningResult(BaseModel):
     """Résultat d'un raffinage (formules SPEC sections 7.1, 7.2, 3.4)."""
 
     planks_produits: int
+    wood_utilise: int
+    plank_moins_1_utilise: int
     wood_retour: float
     plank_moins_1_retour: float
     cout_station: float
@@ -175,7 +177,8 @@ class Route(BaseModel):
     tier: int
     quantite: int
     achat_wood: SourcingLeg
-    achat_plank: SourcingLeg
+    # ``None`` quand la recette ne consomme pas de plank T-1 (cas du T2).
+    achat_plank: SourcingLeg | None = None
     raffinage: RefiningResult
     vente: SalesScenario
     recup_wood: float

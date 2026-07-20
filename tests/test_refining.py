@@ -80,7 +80,10 @@ class TestRefine:
         result = refining.refine(128, 7, focus=True, daily_bonus_pct=0, station_rate=50)
         rrr = refining.compute_rrr(focus=True)
         assert result.planks_produits == 128
-        assert result.wood_retour == pytest.approx(128 * rrr)
+        # Recette T7 : 5 bois + 1 plank T6 par unité produite.
+        assert result.wood_utilise == 128 * 5
+        assert result.plank_moins_1_utilise == 128
+        assert result.wood_retour == pytest.approx(128 * 5 * rrr)
         assert result.plank_moins_1_retour == pytest.approx(128 * rrr)
         assert result.rrr_effectif == pytest.approx(rrr)
         assert result.cout_station == pytest.approx(128 * 14.175 * 0.5)
@@ -88,7 +91,8 @@ class TestRefine:
 
     def test_rrr_applies_to_both_inputs(self) -> None:
         result = refining.refine(100, 6, focus=False, station_rate=50)
-        assert result.wood_retour == result.plank_moins_1_retour
+        # Recette T6 : 4 bois pour 1 plank T5 → le retour bois est 4× plus gros.
+        assert result.wood_retour == pytest.approx(4 * result.plank_moins_1_retour)
 
     def test_no_focus_means_zero_focus_used(self) -> None:
         result = refining.refine(50, 5, focus=False, station_rate=30)

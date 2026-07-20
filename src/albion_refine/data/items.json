@@ -48,6 +48,20 @@
     }
   },
   "planks": {
+    "_recipe_note": "Recettes confirmées in-game le 20/07/2026 (SPEC_FIX section 1.2). La V1.0 supposait à tort wood_qty=1 pour tous les tiers.",
+    "T2_PLANKS": {
+      "item_id": "T2_PLANKS",
+      "tier": 2,
+      "en_name": "Birch Planks (T2)",
+      "category": "refined_resource",
+      "resource_type": "plank",
+      "recipe": {
+        "wood_tier": 2,
+        "wood_qty": 1,
+        "lower_plank_tier": null,
+        "lower_plank_qty": 0
+      }
+    },
     "T3_PLANKS": {
       "item_id": "T3_PLANKS",
       "tier": 3,
@@ -56,9 +70,9 @@
       "resource_type": "plank",
       "recipe": {
         "wood_tier": 3,
-        "wood_qty": 1,
-        "lower_plank_tier": null,
-        "lower_plank_qty": 0
+        "wood_qty": 2,
+        "lower_plank_tier": 2,
+        "lower_plank_qty": 1
       }
     },
     "T4_PLANKS": {
@@ -69,7 +83,7 @@
       "resource_type": "plank",
       "recipe": {
         "wood_tier": 4,
-        "wood_qty": 1,
+        "wood_qty": 2,
         "lower_plank_tier": 3,
         "lower_plank_qty": 1
       }
@@ -82,7 +96,7 @@
       "resource_type": "plank",
       "recipe": {
         "wood_tier": 5,
-        "wood_qty": 1,
+        "wood_qty": 3,
         "lower_plank_tier": 4,
         "lower_plank_qty": 1
       }
@@ -95,7 +109,7 @@
       "resource_type": "plank",
       "recipe": {
         "wood_tier": 6,
-        "wood_qty": 1,
+        "wood_qty": 4,
         "lower_plank_tier": 5,
         "lower_plank_qty": 1
       }
@@ -108,7 +122,7 @@
       "resource_type": "plank",
       "recipe": {
         "wood_tier": 7,
-        "wood_qty": 1,
+        "wood_qty": 5,
         "lower_plank_tier": 6,
         "lower_plank_qty": 1
       }
@@ -121,7 +135,7 @@
       "resource_type": "plank",
       "recipe": {
         "wood_tier": 8,
-        "wood_qty": 1,
+        "wood_qty": 5,
         "lower_plank_tier": 7,
         "lower_plank_qty": 1
       }
