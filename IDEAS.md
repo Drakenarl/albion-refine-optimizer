@@ -23,6 +23,13 @@ Notes prises pendant l'implémentation de la V1. **Rien de ceci n'est implément
 - **Scraping des station fees** ou profils de station sauvegardés localement.
 - **Mode batch** (`--tiers 6,7,8`) avec rapport comparatif.
 - **Sauvegarde locale des runs** (historique JSON pour comparaison).
+- **Afficher les deux scénarios (A et B) côte à côte** systématiquement, pas
+  juste le meilleur. Le spread entre le top buy order (scénario A) et le sell
+  order (scénario B) est une info critique pour évaluer le risque : quand le
+  spread est énorme, la marge affichée du scénario B est théorique et suppose
+  que le sell order sera rempli — ce qui n'est pas garanti à court terme.
+  Actuellement l'outil masque cette info en ne retenant que le meilleur des
+  deux.
 
 ## V3
 
