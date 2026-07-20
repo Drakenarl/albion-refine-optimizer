@@ -1,0 +1,198 @@
+{
+  "_meta": {
+    "description": "Extract réduit des items.json de l'AODP, limité aux bois bruts et planks T4-T8 pertinents pour le projet albion-refine-optimizer",
+    "source": "https://github.com/broderickhyman/ao-bin-dumps/blob/master/formatted/items.json",
+    "extracted_on": "2026-07-19",
+    "server_compatibility": "europe, west, east"
+  },
+  "wood": {
+    "T4_WOOD": {
+      "item_id": "T4_WOOD",
+      "tier": 4,
+      "en_name": "Rough Logs",
+      "fr_name": "Bûches grossières",
+      "category": "raw_resource",
+      "resource_type": "wood"
+    },
+    "T5_WOOD": {
+      "item_id": "T5_WOOD",
+      "tier": 5,
+      "en_name": "Fine Logs",
+      "fr_name": "Bûches raffinées",
+      "category": "raw_resource",
+      "resource_type": "wood"
+    },
+    "T6_WOOD": {
+      "item_id": "T6_WOOD",
+      "tier": 6,
+      "en_name": "Exquisite Logs",
+      "fr_name": "Bûches exquises",
+      "category": "raw_resource",
+      "resource_type": "wood"
+    },
+    "T7_WOOD": {
+      "item_id": "T7_WOOD",
+      "tier": 7,
+      "en_name": "Ashenbark Logs",
+      "fr_name": "Bûches d'écorce cendrée",
+      "category": "raw_resource",
+      "resource_type": "wood"
+    },
+    "T8_WOOD": {
+      "item_id": "T8_WOOD",
+      "tier": 8,
+      "en_name": "Bloodoak Logs",
+      "fr_name": "Bûches de chêne sanglant",
+      "category": "raw_resource",
+      "resource_type": "wood"
+    }
+  },
+  "planks": {
+    "T3_PLANKS": {
+      "item_id": "T3_PLANKS",
+      "tier": 3,
+      "en_name": "Rough Planks",
+      "category": "refined_resource",
+      "resource_type": "plank",
+      "recipe": {
+        "wood_tier": 3,
+        "wood_qty": 1,
+        "lower_plank_tier": null,
+        "lower_plank_qty": 0
+      }
+    },
+    "T4_PLANKS": {
+      "item_id": "T4_PLANKS",
+      "tier": 4,
+      "en_name": "Birch Planks",
+      "category": "refined_resource",
+      "resource_type": "plank",
+      "recipe": {
+        "wood_tier": 4,
+        "wood_qty": 1,
+        "lower_plank_tier": 3,
+        "lower_plank_qty": 1
+      }
+    },
+    "T5_PLANKS": {
+      "item_id": "T5_PLANKS",
+      "tier": 5,
+      "en_name": "Chestnut Planks",
+      "category": "refined_resource",
+      "resource_type": "plank",
+      "recipe": {
+        "wood_tier": 5,
+        "wood_qty": 1,
+        "lower_plank_tier": 4,
+        "lower_plank_qty": 1
+      }
+    },
+    "T6_PLANKS": {
+      "item_id": "T6_PLANKS",
+      "tier": 6,
+      "en_name": "Pine Planks",
+      "category": "refined_resource",
+      "resource_type": "plank",
+      "recipe": {
+        "wood_tier": 6,
+        "wood_qty": 1,
+        "lower_plank_tier": 5,
+        "lower_plank_qty": 1
+      }
+    },
+    "T7_PLANKS": {
+      "item_id": "T7_PLANKS",
+      "tier": 7,
+      "en_name": "Cedar Planks",
+      "category": "refined_resource",
+      "resource_type": "plank",
+      "recipe": {
+        "wood_tier": 7,
+        "wood_qty": 1,
+        "lower_plank_tier": 6,
+        "lower_plank_qty": 1
+      }
+    },
+    "T8_PLANKS": {
+      "item_id": "T8_PLANKS",
+      "tier": 8,
+      "en_name": "Bloodoak Planks",
+      "category": "refined_resource",
+      "resource_type": "plank",
+      "recipe": {
+        "wood_tier": 8,
+        "wood_qty": 1,
+        "lower_plank_tier": 7,
+        "lower_plank_qty": 1
+      }
+    }
+  },
+  "refined_item_values": {
+    "_note": "Item Value (IV) des planks raffinés par tier. À reconfirmer en jeu.",
+    "_source": "forum.albiononline.com Thread 49690 + Thread 128681, cross-check avec patch v19.000.1",
+    "T4": 14,
+    "T5": 30,
+    "T6": 62,
+    "T7": 126,
+    "T8": 254
+  },
+  "nutrition_per_refined_unit": {
+    "_note": "Nutrition consommée par unité raffinée = IV × 0.1125. Valeurs approximatives à reconfirmer.",
+    "T4": 1.575,
+    "T5": 3.375,
+    "T6": 6.975,
+    "T7": 14.175,
+    "T8": 28.575
+  },
+  "station_fee_format": {
+    "_note": "Depuis patch v19.000.1, les station owners fixent leur fee en 'silver par 100 nutrition consommée', pas en pourcentage. Voir SPEC.md section 3.4 pour la formule corrigée.",
+    "example": "Un owner fixe 50 silver/100 nutrition. Raffiner 100 T7 planks consomme 100 × 14.175 = 1417.5 nutrition. Coût station = 1417.5 × (50/100) = 708.75 silver.",
+    "typical_range_silver_per_100_nutrition": "30 à 500"
+  },
+  "cities": {
+    "Caerleon": {
+      "safe_route": false,
+      "warning": "Zone rouge autour de Caerleon — risque PK sur les routes d'accès",
+      "refining_bonuses": {
+        "wood": 0,
+        "note": "Ville centrale, pas de spécialité refining"
+      }
+    },
+    "Fort Sterling": {
+      "safe_route": true,
+      "refining_bonuses": {
+        "wood": 40,
+        "note": "Spécialité bois (+40%) + bonus city général (+18%) = +58% total permanent"
+      }
+    },
+    "Lymhurst": {
+      "safe_route": true,
+      "refining_bonuses": {
+        "fiber": 40
+      }
+    },
+    "Bridgewatch": {
+      "safe_route": true,
+      "refining_bonuses": {
+        "stone": 40
+      }
+    },
+    "Martlock": {
+      "safe_route": true,
+      "refining_bonuses": {
+        "hide": 40
+      }
+    },
+    "Thetford": {
+      "safe_route": true,
+      "refining_bonuses": {
+        "ore": 40
+      }
+    },
+    "Brecilien": {
+      "safe_route": true,
+      "excluded_by_default": true,
+      "note": "Transport cher et faible volume, exclue par défaut"
+    }
+  }
+}
