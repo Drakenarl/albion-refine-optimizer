@@ -1,3 +1,7 @@
+# Artefacts d'amorçage Claude Code (ne pas versionner)
+CLAUDE_CODE_PROMPT.md
+BUNDLE_INDEX.md
+
 # ==================== Python ====================
 __pycache__/
 *.py[cod]

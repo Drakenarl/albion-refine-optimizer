@@ -93,7 +93,36 @@ albion-refine optimize --tier 7 --mode focus --focus-available 10000 --format js
 
 ## Options CLI complètes
 
-*[À remplir par Claude Code — sortie de `albion-refine optimize --help`]*
+### `albion-refine optimize`
+
+| Option | Type | Défaut | Description |
+|---|---|---|---|
+| `--tier` | int | *(requis)* | Tier du plank à produire (4-8). |
+| `--station-rate` | float | *(requis)* | Rate de la station en silver / 100 nutrition. |
+| `--mode` | `capital` \| `fixed` \| `focus` | `fixed` | Mode de dimensionnement de la quantité. |
+| `--capital` | float | — | Budget silver (mode `capital`). |
+| `--quantite` | int | — | Quantité de bois (mode `fixed`). |
+| `--focus-available` | float | — | Budget focus disponible (mode `focus`). |
+| `--focus` / `--no-focus` | flag | `--no-focus` | Active le focus (+59% RRR). Toujours actif en mode `focus`. |
+| `--daily-bonus` | `none` \| `10` \| `20` | `none` | Bonus quotidien de production. |
+| `--cost-per-focus` | float | `0.0` | Coût silver d'un point de focus (coût d'opportunité). |
+| `--seuil-marge` | float | `30` | Marge nette minimale en % pour retenir une route. |
+| `--exclude-vente` | str | — | Ville à exclure de la vente (répétable). |
+| `--exclude-achat` | str | — | Ville à exclure de l'achat (répétable). |
+| `--format` | `table` \| `json` | `table` | Format de sortie. |
+| `--no-cache` | flag | off | Ignore le cache local et force le refresh AODP. |
+| `--server` | str | `europe` | Serveur AODP (`europe`, `west`, `east`). |
+
+> **Note** : le `--station-rate` est le taux affiché dans l'UI de la station en jeu, exprimé en silver par 100 nutrition (format depuis le patch v19.000.1). Il est obligatoire car il n'a pas de valeur par défaut sensée.
+
+### Commandes utilitaires
+
+```bash
+albion-refine check-item-ids     # vérifie les item IDs contre items.json
+albion-refine test-api           # ping l'AODP et vérifie qu'un prix revient
+albion-refine clear-cache        # vide le cache local
+albion-refine dump-nutrition     # affiche la table nutrition par tier
+```
 
 ---
 
@@ -135,7 +164,53 @@ Pour améliorer la fraîcheur des données sur les items qui t'intéressent, ins
 
 ## Architecture
 
-*[À remplir par Claude Code — arbre du projet + diagramme de flux]*
+### Arbre du projet
+
+```
+albion-refine-optimizer/
+├── src/albion_refine/
+│   ├── config.py         # Constantes : item IDs, villes, taxes, nutrition, endpoints
+│   ├── models.py         # Modèles Pydantic : PriceQuote, Route, RefiningResult, …
+│   ├── aodp_client.py    # Client HTTP async httpx + cache diskcache 15 min (I/O pur)
+│   ├── refining.py       # Formules RRR, outputs, coût station (math pure)
+│   ├── market.py         # Order book walker, taxes, scénarios de vente A/B
+│   ├── optimizer.py      # Orchestrateur des phases 1→5, filtrage, tri, top 5
+│   ├── formatters.py     # Rendu rich (panneaux + check-list) et export JSON
+│   ├── cli.py            # Entrée typer (optimize + commandes utilitaires)
+│   └── data/items.json   # Extract items bois/planks embarqué
+└── tests/                # pytest + pytest-httpx, fixtures AODP réalistes
+```
+
+### Séparation des responsabilités
+
+Chaque module a une seule responsabilité, ce qui rend la logique métier testable
+sans réseau et réutilisable telle quelle par un futur backend (V3) :
+
+- `aodp_client` fait **uniquement** de l'I/O réseau et du cache ;
+- `refining` et `market` sont de la **logique pure** (aucun I/O) ;
+- `optimizer` **compose** ces modules et applique filtres/tris ;
+- `cli`/`formatters` ne font que de l'**UX terminal**.
+
+### Flux d'une optimisation
+
+```
+CLI (typer)
+   │  parse les options → OptimizerParams
+   ▼
+run_optimization ──► AodpClient ──► endpoints AODP /prices + /history (cache 15 min)
+   │                                    │
+   │                              PriceQuote, VolumeData
+   ▼
+optimize (pur)
+   1. Sourcing bois T{N}         (par ville, filtre fraîcheur)
+   2. Sourcing plank T{N-1}      (achat marché)
+   3. Raffinage à Fort Sterling  (RRR, outputs, coût station)
+   4. Évaluation ventes A/B      (instant sell vs sell order, taxes, fill proba)
+   5. Synthèse combinatoire      (récup RRR, marge nette, filtres, tri, top 5)
+   ▼
+OptimizationResult ──► formatters ──► tableau rich ou JSON
+```
+
 
 ---
 
