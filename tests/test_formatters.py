@@ -98,6 +98,8 @@ class TestRenderReport:
         text = console.export_text()
         assert "TOP 1" in text
         assert "CHECK-LIST" in text
+        assert "CONSEILS TRADING" in text
+        assert "vente principale" in text
         # La route passe par Caerleon → flag zone rouge attendu.
         assert "ZONE ROUGE" in text
 

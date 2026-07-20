@@ -42,6 +42,14 @@ _RECO_LABEL: dict[str, str] = {
 }
 
 
+_CONSEILS_TRADING: tuple[str, ...] = (
+    "Ouvrir en jeu les pages listées ci-dessus pour rafraîchir la data",
+    "Relancer l'outil 30-60 secondes après pour obtenir les vrais prix",
+    "Confirmer le top buy order en jeu avant de committer sur instant sell",
+    "Ne jamais placer un sell order sans vérifier la profondeur du carnet",
+)
+
+
 def fmt_silver(value: float) -> str:
     """Formate un montant en silver avec séparateur d'espace (ex. ``31 360 s``)."""
     return f"{value:,.0f}".replace(",", " ") + " s"
@@ -261,7 +269,14 @@ def render_report(result: OptimizationResult, console: Console | None = None) ->
     for entry in result.refresh_checklist:
         icon, color = _FRESHNESS_ICON[entry.freshness]
         line = f"[ ] {entry.city} : {entry.item_id} (data {fmt_age(entry.age_hours)} {icon})"
+        if entry.role:
+            line += f" — {entry.role}"
         console.print(line, style=color)
+
+    console.print()
+    console.print("━━━ CONSEILS TRADING ━━━", style="bold")
+    for conseil in _CONSEILS_TRADING:
+        console.print(f"  - {conseil}")
 
 
 def _render_no_routes(result: OptimizationResult, console: Console) -> None:

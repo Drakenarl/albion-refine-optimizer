@@ -401,11 +401,19 @@ def _build_checklist(
     seen: set[tuple[str, str]] = set()
     checklist: list[RefreshChecklistItem] = []
     for route in routes:
-        pairs = [(route.achat_wood.item_id, route.achat_wood.city)]
+        pairs = [
+            (
+                route.achat_wood.item_id,
+                route.achat_wood.city,
+                "critique, le prix du bois structure le coût",
+            ),
+        ]
         if route.achat_plank is not None:
-            pairs.append((route.achat_plank.item_id, route.achat_plank.city))
-        pairs.append((config.plank_item_id(route.tier), route.vente.ville))
-        for item_id, city in pairs:
+            pairs.append(
+                (route.achat_plank.item_id, route.achat_plank.city, "critique, prix du plank T-1")
+            )
+        pairs.append((config.plank_item_id(route.tier), route.vente.ville, "vente principale"))
+        for item_id, city, role in pairs:
             if (item_id, city) in seen:
                 continue
             seen.add((item_id, city))
@@ -421,6 +429,7 @@ def _build_checklist(
                         params.freshness_warning_hours,
                         params.freshness_critical_hours,
                     ),
+                    role=role,
                 )
             )
     return checklist

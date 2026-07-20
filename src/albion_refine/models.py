@@ -238,6 +238,8 @@ class RefreshChecklistItem(BaseModel):
     item_id: str
     age_hours: float | None
     freshness: FreshnessLevel
+    # Rôle de la donnée dans la route, pour prioriser les rafraîchissements.
+    role: str = ""
 
 
 class DiscardedRoute(BaseModel):
