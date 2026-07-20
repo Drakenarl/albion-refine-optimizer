@@ -132,6 +132,60 @@ class TestScenarioAFiltering:
         assert result.discarded_best.marge_pct < 20
 
 
+class TestRecuperationWalk:
+    """La récup RRR passe par le carnet d'achat de Fort Sterling (SPEC_FIX 5)."""
+
+    def _run(self, volume_fs: float | None) -> optimizer.OptimizationResult:
+        now = datetime(2026, 7, 19, 15, 20, 0)
+        when = datetime(2026, 7, 19, 15, 0, 0)
+        quotes = [
+            _quote("T4_WOOD", "Martlock", sell=100, when=when),
+            _quote("T3_PLANKS", "Martlock", sell=200, when=when),
+            _quote("T4_WOOD", "Fort Sterling", sell=120, buy=90, when=when),
+            _quote("T3_PLANKS", "Fort Sterling", sell=220, buy=180, when=when),
+            _quote("T4_PLANKS", "Lymhurst", sell=600, buy=500, when=when),
+        ]
+        volumes = [VolumeData(item_id="T4_PLANKS", city="Lymhurst", total_volume_24h=1000)]
+        if volume_fs is not None:
+            volumes += [
+                VolumeData(item_id="T4_WOOD", city="Fort Sterling", total_volume_24h=volume_fs),
+                VolumeData(item_id="T3_PLANKS", city="Fort Sterling", total_volume_24h=volume_fs),
+            ]
+        params = OptimizerParams(
+            tier=4,
+            mode=QuantityMode.FIXED,
+            quantite=100,
+            station_rate=100,
+            seuil_marge_min_pct=-1000,
+        )
+        return optimize(params, quotes, volumes, now)
+
+    def test_recovery_credited_when_book_is_deep(self) -> None:
+        route = self._run(volume_fs=10_000).routes[0]
+        # RRR sans focus ≈ 0.367 : 200 bois → 73 retournés, 100 planks → 36.
+        assert route.recup_wood_absorbe == route.recup_wood_demande
+        assert route.recup_wood > 0
+        assert route.recup_plank > 0
+        assert WarningCode.RECUP_PARTIELLE not in route.warnings
+
+    def test_recovery_partial_when_volume_is_thin(self) -> None:
+        route = self._run(volume_fs=10).routes[0]
+        assert route.recup_wood_absorbe == 10
+        assert route.recup_wood_absorbe < route.recup_wood_demande
+        assert WarningCode.RECUP_PARTIELLE in route.warnings
+
+    def test_recovery_zero_without_history(self) -> None:
+        route = self._run(volume_fs=None).routes[0]
+        assert route.recup_totale == 0.0
+        assert route.recup_wood_absorbe == 0
+
+    def test_recovery_lowers_net_cost(self) -> None:
+        riche = self._run(volume_fs=10_000).routes[0]
+        pauvre = self._run(volume_fs=None).routes[0]
+        assert riche.cout_net < pauvre.cout_net
+        assert riche.marge_pct > pauvre.marge_pct
+
+
 class TestFixtureIntegration:
     def _params(self, **overrides: object) -> OptimizerParams:
         base: dict[str, object] = {

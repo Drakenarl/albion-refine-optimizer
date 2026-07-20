@@ -46,6 +46,57 @@ class TestWalkBook:
         assert result.prix_moyen == pytest.approx(1100.0)
 
 
+class TestWalkBookDescending:
+    def test_absorbs_everything_when_deep_enough(self) -> None:
+        result = market.walk_book_descending([(1000.0, 500)], 128)
+        assert result.total_absorbed == 128
+        assert result.total_cost == pytest.approx(128000.0)
+
+    def test_partial_absorption_is_allowed(self) -> None:
+        result = market.walk_book_descending([(1000.0, 50), (900.0, 30)], 128)
+        assert result.total_absorbed == 80
+        assert result.total_cost == pytest.approx(50 * 1000.0 + 30 * 900.0)
+
+    def test_empty_book(self) -> None:
+        result = market.walk_book_descending([], 128)
+        assert result.total_absorbed == 0
+        assert result.total_cost == 0.0
+        assert result.prix_moyen == 0.0
+
+    def test_zero_quantity(self) -> None:
+        assert market.walk_book_descending([(1000.0, 50)], 0).total_absorbed == 0
+
+    def test_skips_invalid_levels(self) -> None:
+        result = market.walk_book_descending([(0.0, 50), (1000.0, 10)], 10)
+        assert result.total_absorbed == 10
+        assert result.prix_moyen == pytest.approx(1000.0)
+
+
+class TestRecoveryValue:
+    def test_recovery_walks_buy_book(self) -> None:
+        recovery = market.compute_recovery_value(28, [(1000.0, 100)])
+        assert recovery.absorbe == 28
+        assert recovery.demande == 28
+        assert recovery.partielle is False
+        assert recovery.valeur == pytest.approx(28 * 1000.0 * 0.92)
+
+    def test_recovery_partial_when_stack_insufficient(self) -> None:
+        recovery = market.compute_recovery_value(28, [(1000.0, 15)])
+        assert recovery.absorbe == 15
+        assert recovery.demande == 28
+        assert recovery.partielle is True
+        assert recovery.valeur == pytest.approx(15 * 1000.0 * 0.92)
+
+    def test_recovery_zero_when_no_buy_order(self) -> None:
+        recovery = market.compute_recovery_value(28, [])
+        assert recovery.valeur == 0.0
+        assert recovery.absorbe == 0
+
+    def test_fractional_return_is_floored(self) -> None:
+        recovery = market.compute_recovery_value(27.9, [(1000.0, 100)])
+        assert recovery.demande == 27
+
+
 class TestFreshness:
     def test_fresh(self) -> None:
         level = market.classify_freshness(timedelta(hours=1), 3, 6)

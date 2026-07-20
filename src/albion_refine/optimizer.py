@@ -143,11 +143,34 @@ def _make_leg(
     )
 
 
-def _recuperation(quote_fs: PriceQuote | None, retour: float, ignore: bool) -> float:
-    """Crédite la revente des retours RRR en instant sell à Fort Sterling."""
+def _recuperation(
+    quote_fs: PriceQuote | None,
+    volume_fs: VolumeData | None,
+    retour: float,
+    ignore: bool,
+) -> market.RecoveryResult:
+    """Valorise les retours RRR en instant sell à Fort Sterling, carnet à l'appui.
+
+    L'AODP n'expose pas la profondeur des buy orders : on estime le stack
+    absorbable par le **volume échangé sur 24h** de l'item dans la ville de
+    raffinage. Sans historique exploitable, on ne crédite rien plutôt que de
+    supposer une profondeur infinie (choix conservateur, SPEC_FIX 5.3).
+
+    Args:
+        quote_fs: Prix de l'item à Fort Sterling.
+        volume_fs: Volume 24h de l'item à Fort Sterling (profondeur estimée).
+        retour: Quantité retournée par le RRR.
+        ignore: Vrai pour désactiver complètement la récupération.
+
+    Returns:
+        Un ``RecoveryResult`` (valeur nette de taxe, quantité absorbée/demandée).
+    """
+    demande = int(retour)
     if ignore or quote_fs is None or not quote_fs.has_buy_offer:
-        return 0.0
-    return market.apply_instant_sell_tax(retour * quote_fs.buy_price_max)
+        return market.RecoveryResult(valeur=0.0, absorbe=0, demande=demande)
+    profondeur = int(volume_fs.total_volume_24h) if volume_fs is not None else 0
+    book = [(float(quote_fs.buy_price_max), profondeur)]
+    return market.compute_recovery_value(retour, book)
 
 
 def _evaluate_sales(
@@ -254,6 +277,7 @@ def _build_route(
     output_quote: PriceQuote,
     volume: VolumeData | None,
     quotes: QuoteIndex,
+    volumes: VolumeIndex,
     now: datetime,
 ) -> Route | None:
     """Évalue une combinaison complète et retourne une ``Route`` (ou ``None``)."""
@@ -291,18 +315,22 @@ def _build_route(
 
     fs = config.REFINING_CITY
     recup_wood = _recuperation(
-        quotes.get((wood_quote.item_id, fs)), refined.wood_retour, params.ignore_recup
+        quotes.get((wood_quote.item_id, fs)),
+        volumes.get((wood_quote.item_id, fs)),
+        refined.wood_retour,
+        params.ignore_recup,
     )
     recup_plank = (
         _recuperation(
             quotes.get((plank_quote.item_id, fs)),
+            volumes.get((plank_quote.item_id, fs)),
             refined.plank_moins_1_retour,
             params.ignore_recup,
         )
         if plank_quote is not None
-        else 0.0
+        else market.RecoveryResult(valeur=0.0, absorbe=0, demande=0)
     )
-    recup_totale = recup_wood + recup_plank
+    recup_totale = recup_wood.valeur + recup_plank.valeur
     cout_net = cout_total - recup_totale
 
     scenario_a = sale.scenario_a_instant_sell
@@ -330,6 +358,8 @@ def _build_route(
         cities.add(plank_leg.city)
         legs_fresh.append(plank_leg.freshness)
     warnings = _collect_warnings(cities, legs_fresh, volume, quantity)
+    if recup_wood.partielle or recup_plank.partielle:
+        warnings.append(WarningCode.RECUP_PARTIELLE)
 
     return Route(
         tier=tier,
@@ -338,8 +368,12 @@ def _build_route(
         achat_plank=plank_leg,
         raffinage=refined,
         vente=sale,
-        recup_wood=recup_wood,
-        recup_plank=recup_plank,
+        recup_wood=recup_wood.valeur,
+        recup_plank=recup_plank.valeur,
+        recup_wood_absorbe=recup_wood.absorbe,
+        recup_wood_demande=recup_wood.demande,
+        recup_plank_absorbe=recup_plank.absorbe,
+        recup_plank_demande=recup_plank.demande,
         recup_totale=recup_totale,
         cout_total=cout_total,
         cout_net=cout_net,
@@ -496,6 +530,7 @@ def optimize(
                     output_quote,
                     volumes.get((output_item, sell_city)),
                     quotes,
+                    volumes,
                     now,
                 )
                 if route is not None:
@@ -561,8 +596,11 @@ async def run_optimization(
 
     items = [item for item in (wood_item, plank_input_item, output_item) if item is not None]
     all_buy = sorted(set(params.buy_cities()) | set(params.sell_cities()))
+    # Les volumes servent à la fill probability (planks de sortie) et à estimer
+    # la profondeur des buy orders pour la récupération RRR (inputs à FS).
+    history_cities = sorted({*params.sell_cities(), config.REFINING_CITY})
     async with AodpClient(server=server, use_cache=use_cache) as client:
         quotes = await client.get_prices(items, all_buy)
-        volumes = await client.get_history([output_item], params.sell_cities())
+        volumes = await client.get_history(items, history_cities)
 
     return optimize(params, quotes, volumes, reference)

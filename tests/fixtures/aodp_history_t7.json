@@ -4,12 +4,36 @@
     "item_id": "T7_PLANKS",
     "quality": 1,
     "data": [
-      {"item_count": 342, "avg_price": 1508, "timestamp": "2026-07-18T16:00:00"},
-      {"item_count": 415, "avg_price": 1515, "timestamp": "2026-07-18T20:00:00"},
-      {"item_count": 388, "avg_price": 1522, "timestamp": "2026-07-19T00:00:00"},
-      {"item_count": 267, "avg_price": 1518, "timestamp": "2026-07-19T04:00:00"},
-      {"item_count": 291, "avg_price": 1512, "timestamp": "2026-07-19T08:00:00"},
-      {"item_count": 356, "avg_price": 1520, "timestamp": "2026-07-19T12:00:00"}
+      {
+        "item_count": 342,
+        "avg_price": 1508,
+        "timestamp": "2026-07-18T16:00:00"
+      },
+      {
+        "item_count": 415,
+        "avg_price": 1515,
+        "timestamp": "2026-07-18T20:00:00"
+      },
+      {
+        "item_count": 388,
+        "avg_price": 1522,
+        "timestamp": "2026-07-19T00:00:00"
+      },
+      {
+        "item_count": 267,
+        "avg_price": 1518,
+        "timestamp": "2026-07-19T04:00:00"
+      },
+      {
+        "item_count": 291,
+        "avg_price": 1512,
+        "timestamp": "2026-07-19T08:00:00"
+      },
+      {
+        "item_count": 356,
+        "avg_price": 1520,
+        "timestamp": "2026-07-19T12:00:00"
+      }
     ]
   },
   {
@@ -17,12 +41,36 @@
     "item_id": "T7_PLANKS",
     "quality": 1,
     "data": [
-      {"item_count": 128, "avg_price": 1385, "timestamp": "2026-07-18T16:00:00"},
-      {"item_count": 175, "avg_price": 1390, "timestamp": "2026-07-18T20:00:00"},
-      {"item_count": 156, "avg_price": 1395, "timestamp": "2026-07-19T00:00:00"},
-      {"item_count": 89, "avg_price": 1382, "timestamp": "2026-07-19T04:00:00"},
-      {"item_count": 112, "avg_price": 1378, "timestamp": "2026-07-19T08:00:00"},
-      {"item_count": 144, "avg_price": 1380, "timestamp": "2026-07-19T12:00:00"}
+      {
+        "item_count": 128,
+        "avg_price": 1385,
+        "timestamp": "2026-07-18T16:00:00"
+      },
+      {
+        "item_count": 175,
+        "avg_price": 1390,
+        "timestamp": "2026-07-18T20:00:00"
+      },
+      {
+        "item_count": 156,
+        "avg_price": 1395,
+        "timestamp": "2026-07-19T00:00:00"
+      },
+      {
+        "item_count": 89,
+        "avg_price": 1382,
+        "timestamp": "2026-07-19T04:00:00"
+      },
+      {
+        "item_count": 112,
+        "avg_price": 1378,
+        "timestamp": "2026-07-19T08:00:00"
+      },
+      {
+        "item_count": 144,
+        "avg_price": 1380,
+        "timestamp": "2026-07-19T12:00:00"
+      }
     ]
   },
   {
@@ -30,12 +78,36 @@
     "item_id": "T7_PLANKS",
     "quality": 1,
     "data": [
-      {"item_count": 218, "avg_price": 1462, "timestamp": "2026-07-18T16:00:00"},
-      {"item_count": 245, "avg_price": 1470, "timestamp": "2026-07-18T20:00:00"},
-      {"item_count": 232, "avg_price": 1475, "timestamp": "2026-07-19T00:00:00"},
-      {"item_count": 167, "avg_price": 1468, "timestamp": "2026-07-19T04:00:00"},
-      {"item_count": 189, "avg_price": 1460, "timestamp": "2026-07-19T08:00:00"},
-      {"item_count": 210, "avg_price": 1465, "timestamp": "2026-07-19T12:00:00"}
+      {
+        "item_count": 218,
+        "avg_price": 1462,
+        "timestamp": "2026-07-18T16:00:00"
+      },
+      {
+        "item_count": 245,
+        "avg_price": 1470,
+        "timestamp": "2026-07-18T20:00:00"
+      },
+      {
+        "item_count": 232,
+        "avg_price": 1475,
+        "timestamp": "2026-07-19T00:00:00"
+      },
+      {
+        "item_count": 167,
+        "avg_price": 1468,
+        "timestamp": "2026-07-19T04:00:00"
+      },
+      {
+        "item_count": 189,
+        "avg_price": 1460,
+        "timestamp": "2026-07-19T08:00:00"
+      },
+      {
+        "item_count": 210,
+        "avg_price": 1465,
+        "timestamp": "2026-07-19T12:00:00"
+      }
     ]
   },
   {
@@ -43,12 +115,36 @@
     "item_id": "T7_PLANKS",
     "quality": 1,
     "data": [
-      {"item_count": 82, "avg_price": 1490, "timestamp": "2026-07-18T16:00:00"},
-      {"item_count": 95, "avg_price": 1498, "timestamp": "2026-07-18T20:00:00"},
-      {"item_count": 78, "avg_price": 1502, "timestamp": "2026-07-19T00:00:00"},
-      {"item_count": 55, "avg_price": 1495, "timestamp": "2026-07-19T04:00:00"},
-      {"item_count": 67, "avg_price": 1493, "timestamp": "2026-07-19T08:00:00"},
-      {"item_count": 88, "avg_price": 1495, "timestamp": "2026-07-19T12:00:00"}
+      {
+        "item_count": 82,
+        "avg_price": 1490,
+        "timestamp": "2026-07-18T16:00:00"
+      },
+      {
+        "item_count": 95,
+        "avg_price": 1498,
+        "timestamp": "2026-07-18T20:00:00"
+      },
+      {
+        "item_count": 78,
+        "avg_price": 1502,
+        "timestamp": "2026-07-19T00:00:00"
+      },
+      {
+        "item_count": 55,
+        "avg_price": 1495,
+        "timestamp": "2026-07-19T04:00:00"
+      },
+      {
+        "item_count": 67,
+        "avg_price": 1493,
+        "timestamp": "2026-07-19T08:00:00"
+      },
+      {
+        "item_count": 88,
+        "avg_price": 1495,
+        "timestamp": "2026-07-19T12:00:00"
+      }
     ]
   },
   {
@@ -56,12 +152,36 @@
     "item_id": "T7_PLANKS",
     "quality": 1,
     "data": [
-      {"item_count": 145, "avg_price": 1505, "timestamp": "2026-07-18T16:00:00"},
-      {"item_count": 168, "avg_price": 1512, "timestamp": "2026-07-18T20:00:00"},
-      {"item_count": 152, "avg_price": 1515, "timestamp": "2026-07-19T00:00:00"},
-      {"item_count": 108, "avg_price": 1508, "timestamp": "2026-07-19T04:00:00"},
-      {"item_count": 125, "avg_price": 1510, "timestamp": "2026-07-19T08:00:00"},
-      {"item_count": 140, "avg_price": 1510, "timestamp": "2026-07-19T12:00:00"}
+      {
+        "item_count": 145,
+        "avg_price": 1505,
+        "timestamp": "2026-07-18T16:00:00"
+      },
+      {
+        "item_count": 168,
+        "avg_price": 1512,
+        "timestamp": "2026-07-18T20:00:00"
+      },
+      {
+        "item_count": 152,
+        "avg_price": 1515,
+        "timestamp": "2026-07-19T00:00:00"
+      },
+      {
+        "item_count": 108,
+        "avg_price": 1508,
+        "timestamp": "2026-07-19T04:00:00"
+      },
+      {
+        "item_count": 125,
+        "avg_price": 1510,
+        "timestamp": "2026-07-19T08:00:00"
+      },
+      {
+        "item_count": 140,
+        "avg_price": 1510,
+        "timestamp": "2026-07-19T12:00:00"
+      }
     ]
   },
   {
@@ -69,12 +189,110 @@
     "item_id": "T7_PLANKS",
     "quality": 1,
     "data": [
-      {"item_count": 96, "avg_price": 1475, "timestamp": "2026-07-18T16:00:00"},
-      {"item_count": 118, "avg_price": 1480, "timestamp": "2026-07-18T20:00:00"},
-      {"item_count": 105, "avg_price": 1485, "timestamp": "2026-07-19T00:00:00"},
-      {"item_count": 72, "avg_price": 1476, "timestamp": "2026-07-19T04:00:00"},
-      {"item_count": 84, "avg_price": 1478, "timestamp": "2026-07-19T08:00:00"},
-      {"item_count": 98, "avg_price": 1478, "timestamp": "2026-07-19T12:00:00"}
+      {
+        "item_count": 96,
+        "avg_price": 1475,
+        "timestamp": "2026-07-18T16:00:00"
+      },
+      {
+        "item_count": 118,
+        "avg_price": 1480,
+        "timestamp": "2026-07-18T20:00:00"
+      },
+      {
+        "item_count": 105,
+        "avg_price": 1485,
+        "timestamp": "2026-07-19T00:00:00"
+      },
+      {
+        "item_count": 72,
+        "avg_price": 1476,
+        "timestamp": "2026-07-19T04:00:00"
+      },
+      {
+        "item_count": 84,
+        "avg_price": 1478,
+        "timestamp": "2026-07-19T08:00:00"
+      },
+      {
+        "item_count": 98,
+        "avg_price": 1478,
+        "timestamp": "2026-07-19T12:00:00"
+      }
+    ]
+  },
+  {
+    "location": "Fort Sterling",
+    "item_id": "T7_WOOD",
+    "quality": 1,
+    "data": [
+      {
+        "item_count": 768,
+        "avg_price": 140,
+        "timestamp": "2026-07-18T16:00:00"
+      },
+      {
+        "item_count": 1050,
+        "avg_price": 140,
+        "timestamp": "2026-07-18T20:00:00"
+      },
+      {
+        "item_count": 936,
+        "avg_price": 140,
+        "timestamp": "2026-07-19T00:00:00"
+      },
+      {
+        "item_count": 534,
+        "avg_price": 140,
+        "timestamp": "2026-07-19T04:00:00"
+      },
+      {
+        "item_count": 672,
+        "avg_price": 140,
+        "timestamp": "2026-07-19T08:00:00"
+      },
+      {
+        "item_count": 864,
+        "avg_price": 140,
+        "timestamp": "2026-07-19T12:00:00"
+      }
+    ]
+  },
+  {
+    "location": "Fort Sterling",
+    "item_id": "T6_PLANKS",
+    "quality": 1,
+    "data": [
+      {
+        "item_count": 256,
+        "avg_price": 500,
+        "timestamp": "2026-07-18T16:00:00"
+      },
+      {
+        "item_count": 350,
+        "avg_price": 500,
+        "timestamp": "2026-07-18T20:00:00"
+      },
+      {
+        "item_count": 312,
+        "avg_price": 500,
+        "timestamp": "2026-07-19T00:00:00"
+      },
+      {
+        "item_count": 178,
+        "avg_price": 500,
+        "timestamp": "2026-07-19T04:00:00"
+      },
+      {
+        "item_count": 224,
+        "avg_price": 500,
+        "timestamp": "2026-07-19T08:00:00"
+      },
+      {
+        "item_count": 288,
+        "avg_price": 500,
+        "timestamp": "2026-07-19T12:00:00"
+      }
     ]
   }
 ]

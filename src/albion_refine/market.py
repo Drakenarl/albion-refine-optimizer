@@ -67,6 +67,82 @@ def walk_book(book: list[tuple[float, int]], quantity_needed: int) -> WalkResult
     )
 
 
+def walk_book_descending(book: list[tuple[float, int]], quantity: int) -> WalkResult:
+    """Parcourt un carnet de **buy orders** (du meilleur prix vers le plus bas).
+
+    Contrairement à ``walk_book``, l'absorption partielle est autorisée : on
+    revend ce que le carnet peut absorber et le reste est simplement ignoré
+    (SPEC_FIX section 5.2).
+
+    Args:
+        book: Carnet de buy orders, liste de ``(prix, stack)`` en ordre décroissant.
+        quantity: Quantité que l'on cherche à écouler.
+
+    Returns:
+        Un ``WalkResult`` dont ``total_absorbed`` peut être inférieur à
+        ``quantity`` (voire nul si le carnet est vide).
+    """
+    total_revenue = 0.0
+    total_absorbed = 0
+    if quantity > 0:
+        for prix, stack in book:
+            if stack <= 0 or prix <= 0:
+                continue
+            prendre = min(stack, quantity - total_absorbed)
+            total_revenue += prendre * prix
+            total_absorbed += prendre
+            if total_absorbed >= quantity:
+                break
+    prix_moyen = total_revenue / total_absorbed if total_absorbed else 0.0
+    return WalkResult(
+        prix_moyen=prix_moyen, total_cost=total_revenue, total_absorbed=total_absorbed
+    )
+
+
+class RecoveryResult(NamedTuple):
+    """Valorisation des retours RRR après parcours du carnet d'achat."""
+
+    valeur: float
+    absorbe: int
+    demande: int
+
+    @property
+    def partielle(self) -> bool:
+        """Vrai si une partie des retours n'a pas trouvé preneur."""
+        return self.absorbe < self.demande
+
+
+def compute_recovery_value(
+    quantity_returned: float,
+    buy_orders: list[tuple[float, int]],
+) -> RecoveryResult:
+    """Valorise les retours RRR en instant sell, carnet d'achat à l'appui.
+
+    La V1.0 créditait ``top_buy_price × quantité_retournée`` sans vérifier que
+    les buy orders absorbaient réellement la quantité — irréaliste dès qu'on
+    retourne des milliers d'unités (SPEC_FIX section 5). On ne crédite désormais
+    que la part effectivement absorbable ; le reste reste en inventaire, non
+    valorisé. Sans buy order, la récupération vaut 0 silver.
+
+    Args:
+        quantity_returned: Quantité retournée par le RRR (arrondie à l'entier
+            inférieur : on ne revend pas une fraction d'unité).
+        buy_orders: Carnet de buy orders ``(prix, stack)`` dans la ville de
+            raffinage, du meilleur prix au moins bon.
+
+    Returns:
+        Un ``RecoveryResult`` avec la valeur nette de taxe, la quantité
+        absorbée et la quantité demandée.
+    """
+    demande = int(quantity_returned)
+    walk = walk_book_descending(buy_orders, demande)
+    return RecoveryResult(
+        valeur=apply_instant_sell_tax(walk.total_cost),
+        absorbe=walk.total_absorbed,
+        demande=demande,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Fraîcheur des données
 # ---------------------------------------------------------------------------

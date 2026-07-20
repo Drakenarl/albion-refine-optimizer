@@ -52,6 +52,7 @@ class WarningCode(StrEnum):
     ROUTE_ZONE_ROUGE = "ROUTE_ZONE_ROUGE"
     PROFONDEUR_INCERTAINE = "PROFONDEUR_INCERTAINE"
     DATA_JAUNE = "DATA_JAUNE"
+    RECUP_PARTIELLE = "RECUP_PARTIELLE"
 
 
 # Date sentinelle renvoyée par l'AODP quand aucune donnée n'existe.
@@ -206,6 +207,12 @@ class Route(BaseModel):
     vente: VenteBlock
     recup_wood: float
     recup_plank: float
+    # Quantités réellement absorbées par les buy orders de la ville de raffinage
+    # face aux quantités retournées par le RRR (walk du carnet, SPEC_FIX 5).
+    recup_wood_absorbe: int = 0
+    recup_wood_demande: int = 0
+    recup_plank_absorbe: int = 0
+    recup_plank_demande: int = 0
     recup_totale: float
     cout_total: float
     cout_net: float

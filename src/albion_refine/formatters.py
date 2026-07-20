@@ -165,8 +165,23 @@ def _route_panel(route: Route) -> Panel:
 
     # Synthèse.
     body.append("\n")
-    if route.recup_totale > 0:
-        body.append(f"RÉCUP (retours)  : {fmt_silver(route.recup_totale)}\n", style="green")
+    if route.recup_totale > 0 or route.recup_wood_demande > 0:
+        detail = (
+            f"{route.recup_wood_absorbe}/{route.recup_wood_demande} bois absorbés, "
+            f"{route.recup_plank_absorbe}/{route.recup_plank_demande} planks T-1 absorbés"
+        )
+        body.append(
+            f"RÉCUP (retours)  : {fmt_silver(route.recup_totale)} ({detail})\n",
+            style="green",
+        )
+    if WarningCode.RECUP_PARTIELLE in route.warnings:
+        reste_bois = route.recup_wood_demande - route.recup_wood_absorbe
+        reste_plank = route.recup_plank_demande - route.recup_plank_absorbe
+        body.append(
+            f"        ⚠ {reste_bois} bois et {reste_plank} planks T-1 restent en "
+            "inventaire, non valorisés (carnet d'achat insuffisant)\n",
+            style="yellow",
+        )
     body.append(f"COÛT NET (safe)  : {fmt_silver(route.cout_net)}\n")
     benefice_style = "bold green" if route.benefice >= 0 else "bold red"
     sign = "+" if route.benefice >= 0 else ""
