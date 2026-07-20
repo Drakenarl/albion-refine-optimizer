@@ -13,6 +13,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
+from albion_refine import config
 from albion_refine.models import (
     FreshnessLevel,
     OptimizationResult,
@@ -60,6 +61,24 @@ def freshness_icon(level: FreshnessLevel) -> str:
     return _FRESHNESS_ICON[level][0]
 
 
+def classify_age(age_hours_value: float | None) -> FreshnessLevel:
+    """Classe un âge en heures selon les seuils par défaut (3h / 6h).
+
+    Args:
+        age_hours_value: Âge de la donnée en heures, ou ``None``.
+
+    Returns:
+        Le niveau de fraîcheur à afficher.
+    """
+    if age_hours_value is None:
+        return FreshnessLevel.UNKNOWN
+    if age_hours_value >= float(config.DEFAULTS["freshness_critical_hours"]):
+        return FreshnessLevel.CRITICAL
+    if age_hours_value >= float(config.DEFAULTS["freshness_warning_hours"]):
+        return FreshnessLevel.WARNING
+    return FreshnessLevel.FRESH
+
+
 def _marge_color(marge_pct: float) -> str:
     """Retourne la couleur associée à une marge safe (SPEC_FIX section 7.2)."""
     if marge_pct > 50:
@@ -69,6 +88,17 @@ def _marge_color(marge_pct: float) -> str:
     return "red"
 
 
+def _confiance_line(scenario: SalesScenario) -> Text:
+    """Rend la ligne « confiance fraîcheur » d'un scénario de vente."""
+    niveau = classify_age(scenario.data_age_hours)
+    icon, color = _FRESHNESS_ICON[niveau]
+    return Text(
+        f"      × confiance      : {scenario.freshness_factor:.2f} "
+        f"(data {fmt_age(scenario.data_age_hours)} {icon})\n",
+        style=color,
+    )
+
+
 def _append_scenario_a(body: Text, scenario: SalesScenario | None) -> None:
     """Ajoute le bloc du scénario A (instant sell) au corps du panneau."""
     body.append("► INSTANT SELL (safe)\n", style="bold")
@@ -76,9 +106,11 @@ def _append_scenario_a(body: Text, scenario: SalesScenario | None) -> None:
         body.append("      indisponible (aucun buy order exploitable)\n", style="dim")
         return
     body.append(f"      top buy {scenario.prix_unitaire_ref:.0f} s × {scenario.planks} unités\n")
-    body.append(f"      revenu net       : {fmt_silver(scenario.revenu_net)}\n")
+    body.append(f"      revenu net brut  : {fmt_silver(scenario.revenu_net)}\n")
+    body.append(_confiance_line(scenario))
+    body.append(f"      revenu pondéré   : {fmt_silver(scenario.revenu_net_pondere)}\n")
     if scenario.marge_pct is not None:
-        body.append(f"      marge            : {scenario.marge_pct:.1f}%\n")
+        body.append(f"      marge pondérée   : {scenario.marge_pct:.1f}%\n")
 
 
 def _append_scenario_b(body: Text, scenario: SalesScenario | None) -> None:
@@ -97,8 +129,10 @@ def _append_scenario_b(body: Text, scenario: SalesScenario | None) -> None:
         f"      revenu si rempli : {fmt_silver(scenario.revenu_net)}\n",
         style=style,
     )
+    body.append(_confiance_line(scenario))
     body.append(
-        f"      espérance        : {fmt_silver(scenario.expected_revenu)}\n",
+        f"      espérance pondérée : {fmt_silver(scenario.expected_revenu)} "
+        f"({scenario.fill_proba:.2f} × {fmt_silver(scenario.revenu_net_pondere)})\n",
         style=style,
     )
     if scenario.marge_pct is not None:

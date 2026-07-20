@@ -152,6 +152,9 @@ class SalesScenario(BaseModel):
     prix_unitaire_ref: float
     revenu_brut: float
     revenu_net: float
+    # Escompte appliqué au revenu selon l'âge de la donnée de prix (SPEC_FIX 6).
+    freshness_factor: float = 1.0
+    revenu_net_pondere: float = 0.0
     fill_proba: float
     expected_revenu: float
     stack_suffisant: bool

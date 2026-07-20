@@ -173,6 +173,34 @@ def classify_freshness(
     return FreshnessLevel.FRESH
 
 
+def freshness_confidence_factor(age_hours_value: float | None) -> float:
+    """Retourne le facteur de confiance à appliquer à un revenu attendu.
+
+    Un prix vieux de 5h n'est pas aussi fiable qu'un prix de 30 minutes : on
+    escompte progressivement le revenu de vente (SPEC_FIX section 6). Les coûts
+    d'achat ne sont **pas** pondérés : ils seront confirmés en jeu avant l'achat.
+
+    Args:
+        age_hours_value: Âge de la donnée en heures, ou ``None`` si inconnu
+            (traité comme une donnée très vieille, cohérent avec
+            ``classify_freshness``).
+
+    Returns:
+        Un facteur entre 0.5 et 1.0.
+    """
+    if age_hours_value is None:
+        return 0.50
+    if age_hours_value < 0.5:
+        return 1.0
+    if age_hours_value < 2:
+        return 0.95
+    if age_hours_value < 4:
+        return 0.85
+    if age_hours_value < 6:
+        return 0.70
+    return 0.50
+
+
 def age_hours(age: timedelta | None) -> float | None:
     """Convertit un ``timedelta`` en heures (ou ``None``)."""
     if age is None:
@@ -308,6 +336,8 @@ def evaluate_instant_sell(
             data_age_hours=data_age_hours,
         )
     revenu_net = apply_instant_sell_tax(walk.total_cost)
+    facteur = freshness_confidence_factor(data_age_hours)
+    revenu_pondere = revenu_net * facteur
     return SalesScenario(
         certitude="haute",
         strategy=SellStrategy.INSTANT_SELL,
@@ -316,8 +346,10 @@ def evaluate_instant_sell(
         prix_unitaire_ref=buy_price_max,
         revenu_brut=walk.total_cost,
         revenu_net=revenu_net,
+        freshness_factor=facteur,
+        revenu_net_pondere=revenu_pondere,
         fill_proba=1.0,
-        expected_revenu=revenu_net,
+        expected_revenu=revenu_pondere,
         stack_suffisant=True,
         data_age_hours=data_age_hours,
     )
@@ -369,6 +401,8 @@ def evaluate_sell_order(
         listing_price=prix_listing,
         top_sell_order_price=min_sell_price,
     )
+    facteur = freshness_confidence_factor(data_age_hours)
+    revenu_pondere = revenu_net_if_filled * facteur
     return SalesScenario(
         certitude="moyenne",
         strategy=SellStrategy.SELL_ORDER,
@@ -377,8 +411,10 @@ def evaluate_sell_order(
         prix_unitaire_ref=prix_listing,
         revenu_brut=revenu_brut,
         revenu_net=revenu_net_if_filled,
+        freshness_factor=facteur,
+        revenu_net_pondere=revenu_pondere,
         fill_proba=proba,
-        expected_revenu=revenu_net_if_filled * proba,
+        expected_revenu=revenu_pondere * proba,
         stack_suffisant=True,
         data_age_hours=data_age_hours,
     )

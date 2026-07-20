@@ -124,6 +124,43 @@ class TestFreshness:
         assert market.age_hours(None) is None
 
 
+class TestFreshnessConfidence:
+    """Pondération des revenus par l'âge de la donnée (SPEC_FIX section 6)."""
+
+    def test_freshness_factor_1_0_for_fresh_data(self) -> None:
+        assert market.freshness_confidence_factor(0.2) == 1.0
+
+    def test_freshness_factor_0_5_for_stale_data(self) -> None:
+        assert market.freshness_confidence_factor(8) == 0.5
+
+    @pytest.mark.parametrize(
+        ("age", "expected"),
+        [(0.0, 1.0), (0.5, 0.95), (1.9, 0.95), (2.0, 0.85), (3.1, 0.85), (5.7, 0.70), (6.0, 0.50)],
+    )
+    def test_palier_values(self, age: float, expected: float) -> None:
+        assert market.freshness_confidence_factor(age) == pytest.approx(expected)
+
+    def test_unknown_age_is_low_confidence(self) -> None:
+        assert market.freshness_confidence_factor(None) == 0.5
+
+    def test_revenue_penalized_by_stale_freshness(self) -> None:
+        frais = market.evaluate_instant_sell("Lymhurst", 1000.0, 100, data_age_hours=0.2)
+        vieux = market.evaluate_instant_sell("Lymhurst", 1000.0, 100, data_age_hours=3.1)
+        assert frais.revenu_net == pytest.approx(vieux.revenu_net)
+        assert vieux.freshness_factor == pytest.approx(0.85)
+        assert vieux.expected_revenu == pytest.approx(frais.expected_revenu * 0.85)
+
+    def test_sell_order_revenue_is_weighted_too(self) -> None:
+        scenario = market.evaluate_sell_order(
+            "Lymhurst", 1500.0, 100, volume_24h=200, data_age_hours=5.7
+        )
+        assert scenario.freshness_factor == pytest.approx(0.70)
+        assert scenario.revenu_net_pondere == pytest.approx(scenario.revenu_net * 0.70)
+        assert scenario.expected_revenu == pytest.approx(
+            scenario.revenu_net_pondere * scenario.fill_proba
+        )
+
+
 class TestTaxes:
     def test_instant_sell_tax(self) -> None:
         assert market.apply_instant_sell_tax(100000.0) == pytest.approx(92000.0)
@@ -254,13 +291,15 @@ class TestSellOrder:
         assert scenario.revenu_net == pytest.approx(prix_listing * 100 * 0.87)
         # volume 200 / 100 unités, top du carnet, undercut 1% : 0.85 × 0.85 × 1.0
         assert scenario.fill_proba == pytest.approx(0.7225)
-        assert scenario.expected_revenu == pytest.approx(scenario.revenu_net * 0.7225)
+        # Sans âge connu, la confiance fraîcheur tombe à 0.50.
+        assert scenario.freshness_factor == pytest.approx(0.50)
+        assert scenario.expected_revenu == pytest.approx(scenario.revenu_net * 0.7225 * 0.50)
 
     def test_low_volume_reduces_expected(self) -> None:
         scenario = market.evaluate_sell_order("Lymhurst", 1500.0, 200, volume_24h=100)
         # ratio 0.5 → volume_factor 0.3, puis pénalité de position 0.85.
         assert scenario.fill_proba == pytest.approx(0.255)
-        assert scenario.expected_revenu == pytest.approx(scenario.revenu_net * 0.255)
+        assert scenario.expected_revenu == pytest.approx(scenario.revenu_net_pondere * 0.255)
 
     def test_no_sell_reference(self) -> None:
         scenario = market.evaluate_sell_order("Thetford", 0.0, 100, volume_24h=200)

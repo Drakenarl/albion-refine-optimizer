@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -130,6 +130,53 @@ class TestScenarioAFiltering:
         assert result.discarded_best is not None
         assert result.discarded_best.marge_pct is not None
         assert result.discarded_best.marge_pct < 20
+
+
+class TestFreshnessWeighting:
+    """La marge affichée est la marge pondérée par la confiance (SPEC_FIX 6.4)."""
+
+    def _run(self, age_vente_heures: float) -> optimizer.OptimizationResult:
+        now = datetime(2026, 7, 19, 15, 20, 0)
+        achat = datetime(2026, 7, 19, 15, 0, 0)
+        vente = now - timedelta(hours=age_vente_heures)
+        quotes = [
+            _quote("T4_WOOD", "Martlock", sell=100, when=achat),
+            _quote("T3_PLANKS", "Martlock", sell=100, when=achat),
+            _quote("T4_PLANKS", "Lymhurst", sell=600, buy=500, when=vente),
+        ]
+        volumes = [VolumeData(item_id="T4_PLANKS", city="Lymhurst", total_volume_24h=1000)]
+        params = OptimizerParams(
+            tier=4,
+            mode=QuantityMode.FIXED,
+            quantite=100,
+            station_rate=100,
+            ignore_recup=True,
+            seuil_marge_min_pct=-1000,
+        )
+        return optimize(params, quotes, volumes, now)
+
+    def test_margin_uses_weighted_revenue(self) -> None:
+        route = self._run(age_vente_heures=0.2).routes[0]
+        scenario_a = route.vente.scenario_a_instant_sell
+        assert scenario_a is not None
+        assert scenario_a.freshness_factor == 1.0
+        # cout_net = 20000 + 10000 + 157.5 ; revenu net = 46000
+        assert route.benefice == pytest.approx(15842.5)
+
+    def test_revenue_penalized_by_stale_freshness(self) -> None:
+        frais = self._run(age_vente_heures=0.2).routes[0]
+        vieux = self._run(age_vente_heures=3.1).routes[0]
+        scenario = vieux.vente.scenario_a_instant_sell
+        assert scenario is not None
+        assert scenario.freshness_factor == pytest.approx(0.85)
+        assert vieux.revenu_effectif == pytest.approx(frais.revenu_effectif * 0.85)
+        assert vieux.marge_pct < frais.marge_pct
+
+    def test_purchase_cost_is_not_weighted(self) -> None:
+        frais = self._run(age_vente_heures=0.2).routes[0]
+        vieux = self._run(age_vente_heures=5.7).routes[0]
+        # Seul le revenu est escompté : le coût d'achat reste identique.
+        assert vieux.cout_net == pytest.approx(frais.cout_net)
 
 
 class TestRecuperationWalk:
