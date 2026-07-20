@@ -73,7 +73,10 @@ select = [
     "RUF", # ruff-specific rules
 ]
 ignore = [
-    "E501",  # line too long — handled by formatter
+    "E501",   # line too long — handled by formatter
+    "RUF001", # caractères "ambigus" (×, →) volontaires : projet FR + notation math
+    "RUF002", # idem dans les docstrings
+    "RUF003", # idem dans les commentaires
 ]
 
 [tool.ruff.format]
@@ -103,6 +106,7 @@ ignore_missing_imports = true
 # ==================== Pytest ====================
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
