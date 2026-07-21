@@ -2,6 +2,9 @@
 CLAUDE_CODE_PROMPT.md
 BUNDLE_INDEX.md
 
+# Copie du paquet Python cote Vercel (generee par buildCommand, cf vercel.json)
+api/albion_refine/
+
 # ==================== Python ====================
 __pycache__/
 *.py[cod]
