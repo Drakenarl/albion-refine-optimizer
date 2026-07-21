@@ -1,109 +1,112 @@
-# Deploiement — Backend Railway + Frontend Vercel
+# Deploiement — Tout sur Vercel (monorepo)
 
-Deux services independants, deux plateformes gratuites au demarrage. Compte l'ordre : **backend d'abord, frontend ensuite** (le frontend a besoin de l'URL du backend).
+Setup actuel : **un seul deploiement Vercel**, backend (Python serverless) et
+frontend (React static) sur le meme domaine. Zero configuration CORS, zero
+service tiers a gerer.
 
-## 1. Backend sur Railway
+## Architecture
 
-### Pre-requis
+```
+albion-optimizer.vercel.app
+├── /                → frontend Vite (static, servi par CDN Vercel)
+└── /api/*           → api/index.py (fonction serverless Python 3.12)
+                       expose FastAPI health / config / optimize
+```
+
+## Pre-requis
 
 - Compte GitHub avec ce repo pushe.
-- Compte Railway ([railway.com](https://railway.com)) — inscription gratuite, credit initial d'environ 5 $ ou plan Hobby a 5 $/mois selon les changements de tarification.
+- Compte Vercel ([vercel.com](https://vercel.com)) — plan Hobby gratuit.
 
-### Etapes
+## Etapes
 
-1. **Nouveau projet Railway** → *Deploy from GitHub repo* → selectionne `Drakenarl/albion-refine-optimizer`.
-2. Railway detecte automatiquement le [Dockerfile](Dockerfile) et le [railway.toml](railway.toml). Le healthcheck sera sur `/api/health`.
-3. **Variables d'environnement** (onglet *Variables*) : rien d'obligatoire pour un premier deploiement — le port est injecte, CORS accepte tout en developpement. Tu ajouteras `ALBION_ALLOWED_ORIGINS` a l'etape 5.
-4. Lance le premier *Deploy*. Suit les logs — la build Docker prend 2-3 min.
-5. Recupere l'URL publique dans l'onglet *Settings* → *Networking* → *Public Networking*. Exemple : `https://albion-refine-api-production.up.railway.app`.
-6. Verifie manuellement :
-   ```
-   curl https://<ton-url-railway>/api/health
-   → {"status":"ok","version":"2.1.0"}
-   ```
+1. **Nouveau projet Vercel** → *Import Git Repository* → selectionne
+   `Drakenarl/albion-refine-optimizer`.
+2. **Configure** (Vercel devrait auto-detecter grace au [vercel.json](vercel.json)) :
+   - Root Directory : **laisse la racine** (pas `web/` cette fois).
+   - Build Command : pre-rempli par vercel.json (`cd web && npm install && npm run build`).
+   - Output Directory : `web/dist`.
+   - Install Command : Vercel installera automatiquement les deps Python via
+     [requirements.txt](requirements.txt).
+3. **Environment Variables** : rien a definir. Le frontend et le backend sont
+   sur le meme domaine, les appels sont same-origin.
+4. Lance le *Deploy*. Premiere build ~2-3 min (npm install + build Vite + pip
+   install des deps Python).
+5. Recupere l'URL publique. Exemple : `https://albion-refine-optimizer.vercel.app`.
 
-### Notes Railway
+## Verification finale
 
-- Le cache diskcache ecrit dans `/root/.cache/albion-refine`. Ephemere (perdu au redemarrage) — c'est acceptable, il se remplit au fil des requetes.
-- Pas de base de donnees a provisionner : l'app ne persiste rien.
-- Cout attendu : le service dort au ralenti, environ 1-3 $/mois selon le trafic.
+```bash
+# Health check
+curl https://<ton-url>/api/health
+→ {"status":"ok","version":"2.1.0"}
 
----
+# Config
+curl https://<ton-url>/api/config
+→ tiers, villes, defauts...
 
-## 2. Frontend sur Vercel
-
-### Pre-requis
-
-- Meme compte GitHub.
-- Compte Vercel ([vercel.com](https://vercel.com)) — plan Hobby gratuit largement suffisant.
-
-### Etapes
-
-1. **Nouveau projet Vercel** → *Import Git Repository* → selectionne le meme repo.
-2. **Root Directory** : `web` (important, ne pas laisser la racine).
-3. Framework : Vercel detecte *Vite* automatiquement grace au [web/vercel.json](web/vercel.json). Build command et output directory sont pre-remplis.
-4. **Environment Variables** :
-   - `VITE_API_URL` = URL Railway sans slash final (ex. `https://albion-refine-api-production.up.railway.app`)
-5. Lance le *Deploy*. Build TypeScript + Vite en 30-60 s.
-6. Recupere l'URL publique. Exemple : `https://albion-refine-optimizer.vercel.app`.
-
-### Notes Vercel
-
-- Cold start negligeable (fichiers statiques servis via CDN).
-- HTTPS et compression bruli gratuits.
-- Domaine personnalise possible dans *Settings* → *Domains* si tu en as un.
-
----
-
-## 3. Fermer la boucle CORS
-
-Le backend refuse par defaut les origines qu'il ne connait pas. Ajoute l'URL Vercel a la whitelist :
-
-1. Retourne dans Railway → onglet *Variables*.
-2. Ajoute :
-   ```
-   ALBION_ALLOWED_ORIGINS=https://albion-refine-optimizer.vercel.app
-   ```
-   Plusieurs origines separees par des virgules si besoin (custom domain, preview URLs).
-3. Railway redemarre automatiquement le service en 30 s.
-4. Ouvre l'URL Vercel dans un navigateur, lance une optimisation. Si tu vois les cards → tout marche. Si tu vois `CORS error` dans la console browser → l'URL Vercel n'est pas exactement celle whitelistee (verifie protocole `https://`, pas de slash final).
-
----
-
-## Preview URLs Vercel
-
-Vercel cree une URL par branche et par pull request. Si tu veux qu'elles marchent aussi, ajoute leur wildcard a `ALBION_ALLOWED_ORIGINS` :
-
-```
-ALBION_ALLOWED_ORIGINS=https://albion-refine-optimizer.vercel.app,https://albion-refine-optimizer-*.vercel.app
+# Optimize (T7 focus, seuil -100 pour toujours avoir des routes)
+curl -X POST https://<ton-url>/api/optimize \
+  -H "Content-Type: application/json" \
+  -d '{"tier":7,"mode":"capital","capital":3000000,"station_rate":50,"focus":true,"seuil_marge_min_pct":-100}'
+→ JSON de routes
 ```
 
-Note : FastAPI/Starlette ne gere pas le wildcard `*` dans les origins par defaut. Pour supporter les previews, il faut passer par `allow_origin_regex`. A ajouter dans une iteration ulterieure si le besoin se presente.
+Puis ouvre `https://<ton-url>` dans un navigateur, lance une optimisation, tu
+dois voir les cards s'afficher.
 
----
+## Contraintes du plan Hobby
+
+| Limite | Impact |
+|---|---|
+| **10 s max** par requete serverless | Le calcul d'optimize prend 2-5 s, marge OK sauf si AODP rame |
+| **Pas de cache persistant** entre invocations | Chaque requete refait tous les appels AODP (500 ms chacun, acceptable) |
+| **Cold start ~1-2 s** | Premier click apres inactivite un peu lent, ensuite instantane |
+| **10 GB bandwidth/mois** | Largement suffisant sauf trafic massif |
+| **100 GB-hours compute/mois** | Idem, pour un usage entre potes c'est enorme |
+
+Si un jour tu depasses (ex. le calcul depasse 10 s regulierement), tu peux
+migrer le backend sur Railway/Render avec les fichiers [Dockerfile](Dockerfile)
+et [railway.toml](railway.toml) toujours presents dans le repo — il suffit
+alors de definir `VITE_API_URL` cote frontend.
 
 ## Redeployer
 
-- **Backend** : chaque push sur `main` declenche un nouveau build Railway.
-- **Frontend** : chaque push sur `main` declenche un nouveau build Vercel. Les branches produisent des URLs de preview automatiquement.
-
----
+- Chaque push sur `main` declenche un build Vercel automatique.
+- Chaque push sur une branche cree une preview URL du type
+  `https://albion-refine-optimizer-git-<branche>-<user>.vercel.app`.
 
 ## Debug
 
 | Symptome | Cause probable | Fix |
 |---|---|---|
-| Frontend charge, mais "Chargement config..." infini | CORS, ou VITE_API_URL vide | Verifie la console browser + variables Vercel |
-| `502 AODP indisponible` dans le frontend | AODP down, ou probleme reseau Railway | Reessayer, verifier [status Albion Data](https://www.albion-online-data.com/) |
-| Railway `Application failed to respond` | Le port n'est pas bindé sur $PORT | Verifie que `PORT` n'est pas overridée dans les vars |
-| Vercel build echoue `Cannot find module` | `web/package-lock.json` obsolete | `npm install` en local puis commit |
+| Frontend charge, "Chargement config…" infini | La fonction Python a plante au demarrage | Vercel → onglet *Functions* → logs de `api/index.py` |
+| `504 Gateway Timeout` | AODP trop lent, calcul > 10 s | Retry, ou reduire tier / capital |
+| `500 Internal Server Error` sur /api/* | Import Python casse, deps manquantes | Verifier requirements.txt, logs Vercel |
+| Build echoue `Cannot find package.json` | Vercel cherche package.json a la racine | Verifier que buildCommand inclut `cd web` |
+| `Function Payload Too Large` | Reponse > 4.5 MB | Reduire top_n dans OptimizerParams |
 
----
+## Fichiers cles
 
-## Verification finale post-deploiement
+| Fichier | Role |
+|---|---|
+| [vercel.json](vercel.json) | Config monorepo (build, functions, rewrites) |
+| [api/index.py](api/index.py) | Handler serverless qui expose FastAPI |
+| [requirements.txt](requirements.txt) | Deps Python installees par Vercel |
+| [web/vite.config.ts](web/vite.config.ts) | Proxy dev /api → :8000 (uniquement local) |
+| [Dockerfile](Dockerfile) + [railway.toml](railway.toml) | Backup pour redeploy backend ailleurs si besoin |
 
-1. `curl https://<railway>/api/health` → 200 OK
-2. `curl https://<railway>/api/config` → JSON avec tiers/villes
-3. `curl -X POST https://<railway>/api/optimize -H "Content-Type: application/json" -d '{"tier":7,"mode":"capital","capital":3000000,"station_rate":50,"focus":true,"seuil_marge_min_pct":-100}'` → JSON de routes
-4. Ouvrir `https://<vercel>` → formulaire visible, submit -> cards ou alternatives affichees
-5. Devtools -> Network -> voir que la requete part bien vers `<railway>/api/optimize`
+## Setup local pour le dev
+
+Le mode dev reste identique — Vercel n'intervient qu'au deploiement :
+
+```bash
+# Terminal 1 : backend FastAPI
+python -m uvicorn albion_refine.api:app --reload
+
+# Terminal 2 : frontend Vite
+cd web
+npm run dev
+```
+
+Ouvre `http://localhost:5173`.
