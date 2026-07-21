@@ -178,12 +178,16 @@ def _append_scenario_b(body: Text, scenario: SalesScenario | None) -> None:
 def _route_panel(route: Route) -> Panel:
     """Construit un panneau ``rich`` détaillant une route."""
     body = Text()
+    res = config.resource(route.resource_kind)
+    raw_upper = res.display_raw.upper()
+    refined_upper = res.display_refined.upper()
+    refining_city_short = res.refining_city.split()[0].upper()  # FORT ou MARTLOCK
 
     # Achats.
     wood = route.achat_wood
     plank = route.achat_plank
     body.append(
-        f"ACHAT BOIS T{wood.tier}   {wood.city:<14} "
+        f"ACHAT {raw_upper} T{wood.tier}   {wood.city:<14} "
         f"{wood.prix_unitaire:.0f} s × {wood.quantite} = {fmt_silver(wood.cout_total)}\n"
     )
     icon, color = _FRESHNESS_ICON[wood.freshness]
@@ -192,7 +196,7 @@ def _route_panel(route: Route) -> Panel:
     )
     if plank is not None:
         body.append(
-            f"ACHAT PLANK T{plank.tier}  {plank.city:<14} "
+            f"ACHAT {refined_upper} T{plank.tier}  {plank.city:<14} "
             f"{plank.prix_unitaire:.0f} s × {plank.quantite} = {fmt_silver(plank.cout_total)}\n"
         )
         icon, color = _FRESHNESS_ICON[plank.freshness]
@@ -202,11 +206,14 @@ def _route_panel(route: Route) -> Panel:
 
     # Raffinage.
     refined = route.raffinage
-    body.append(f"RAFFINAGE FS     coût station = {fmt_silver(refined.cout_station)}\n")
+    body.append(
+        f"RAFFINAGE {refining_city_short:<6} coût station = {fmt_silver(refined.cout_station)}\n"
+    )
     body.append(
         f"RRR effectif : {refined.rrr_effectif * 100:.1f}% | "
-        f"Output : {refined.planks_produits} planks "
-        f"+ {refined.wood_retour:.0f} bois + {refined.plank_moins_1_retour:.0f} plank T-1 retour\n"
+        f"Output : {refined.planks_produits} {res.display_refined}s "
+        f"+ {refined.wood_retour:.0f} {res.display_raw} "
+        f"+ {refined.plank_moins_1_retour:.0f} {res.display_refined} T-1 retour\n"
     )
     if refined.focus_utilise > 0:
         body.append(f"FOCUS : {refined.focus_utilise:.0f}\n")
@@ -227,10 +234,12 @@ def _route_panel(route: Route) -> Panel:
     # Synthèse.
     body.append("\n")
     if route.recup_totale > 0 or route.recup_wood_demande > 0:
-        ville = route.recup_city or config.REFINING_CITY
+        ville = route.recup_city or res.refining_city
         detail = (
-            f"{route.recup_wood_absorbe}/{route.recup_wood_demande} bois absorbés, "
-            f"{route.recup_plank_absorbe}/{route.recup_plank_demande} planks T-1 absorbés"
+            f"{route.recup_wood_absorbe}/{route.recup_wood_demande} "
+            f"{res.display_raw} absorbés, "
+            f"{route.recup_plank_absorbe}/{route.recup_plank_demande} "
+            f"{res.display_refined} T-1 absorbés"
         )
         body.append(
             f"RÉCUP @ {ville:<11}: {fmt_silver(route.recup_totale)} ({detail})\n",
@@ -240,7 +249,8 @@ def _route_panel(route: Route) -> Panel:
         reste_bois = route.recup_wood_demande - route.recup_wood_absorbe
         reste_plank = route.recup_plank_demande - route.recup_plank_absorbe
         body.append(
-            f"        ⚠ {reste_bois} bois et {reste_plank} planks T-1 restent en "
+            f"        ⚠ {reste_bois} {res.display_raw} et {reste_plank} "
+            f"{res.display_refined} T-1 restent en "
             "inventaire, non valorisés (carnet d'achat insuffisant)\n",
             style="yellow",
         )
@@ -288,7 +298,7 @@ def _route_panel(route: Route) -> Panel:
     )
     if route.marge_pct_b is not None:
         title += f" | potentiel SO {route.marge_pct_b:+.1f}%"
-    subtitle = f"TIER {route.tier} PLANKS — {route.quantite} unités"
+    subtitle = f"TIER {route.tier} {refined_upper} — {route.quantite} unités"
     return Panel(body, title=title, subtitle=subtitle, border_style=_marge_color(route.marge_pct))
 
 

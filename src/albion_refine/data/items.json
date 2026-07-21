@@ -1,8 +1,9 @@
 {
   "_meta": {
-    "description": "Extract réduit des items.json de l'AODP, limité aux bois bruts et planks T4-T8 pertinents pour le projet albion-refine-optimizer",
+    "description": "Extract réduit des items.json de l'AODP : matières premières (bois, peau) et raffinés (planks, cuir) T2-T8 pertinents pour l'optimiseur",
     "source": "https://github.com/broderickhyman/ao-bin-dumps/blob/master/formatted/items.json",
     "extracted_on": "2026-07-19",
+    "extended_on": "2026-07-21 (ajout filiere peau -> cuir a Martlock)",
     "server_compatibility": "europe, west, east"
   },
   "wood": {
@@ -138,6 +139,142 @@
         "wood_qty": 5,
         "lower_plank_tier": 7,
         "lower_plank_qty": 1
+      }
+    }
+  },
+  "hide": {
+    "T4_HIDE": {
+      "item_id": "T4_HIDE",
+      "tier": 4,
+      "en_name": "Rugged Hide",
+      "fr_name": "Peau grossière",
+      "category": "raw_resource",
+      "resource_type": "hide"
+    },
+    "T5_HIDE": {
+      "item_id": "T5_HIDE",
+      "tier": 5,
+      "en_name": "Thin Hide",
+      "fr_name": "Peau fine",
+      "category": "raw_resource",
+      "resource_type": "hide"
+    },
+    "T6_HIDE": {
+      "item_id": "T6_HIDE",
+      "tier": 6,
+      "en_name": "Medium Hide",
+      "fr_name": "Peau moyenne",
+      "category": "raw_resource",
+      "resource_type": "hide"
+    },
+    "T7_HIDE": {
+      "item_id": "T7_HIDE",
+      "tier": 7,
+      "en_name": "Heavy Hide",
+      "fr_name": "Peau épaisse",
+      "category": "raw_resource",
+      "resource_type": "hide"
+    },
+    "T8_HIDE": {
+      "item_id": "T8_HIDE",
+      "tier": 8,
+      "en_name": "Robust Hide",
+      "fr_name": "Peau robuste",
+      "category": "raw_resource",
+      "resource_type": "hide"
+    }
+  },
+  "leather": {
+    "_recipe_note": "Meme structure de recette que les planks : le raffinage se fait a Martlock (+40% specialite) au lieu de Fort Sterling.",
+    "T2_LEATHER": {
+      "item_id": "T2_LEATHER",
+      "tier": 2,
+      "en_name": "Stiff Leather (T2)",
+      "category": "refined_resource",
+      "resource_type": "leather",
+      "recipe": {
+        "hide_tier": 2,
+        "hide_qty": 1,
+        "lower_leather_tier": null,
+        "lower_leather_qty": 0
+      }
+    },
+    "T3_LEATHER": {
+      "item_id": "T3_LEATHER",
+      "tier": 3,
+      "en_name": "Rugged Leather",
+      "category": "refined_resource",
+      "resource_type": "leather",
+      "recipe": {
+        "hide_tier": 3,
+        "hide_qty": 2,
+        "lower_leather_tier": 2,
+        "lower_leather_qty": 1
+      }
+    },
+    "T4_LEATHER": {
+      "item_id": "T4_LEATHER",
+      "tier": 4,
+      "en_name": "Stiff Leather",
+      "category": "refined_resource",
+      "resource_type": "leather",
+      "recipe": {
+        "hide_tier": 4,
+        "hide_qty": 2,
+        "lower_leather_tier": 3,
+        "lower_leather_qty": 1
+      }
+    },
+    "T5_LEATHER": {
+      "item_id": "T5_LEATHER",
+      "tier": 5,
+      "en_name": "Thick Leather",
+      "category": "refined_resource",
+      "resource_type": "leather",
+      "recipe": {
+        "hide_tier": 5,
+        "hide_qty": 3,
+        "lower_leather_tier": 4,
+        "lower_leather_qty": 1
+      }
+    },
+    "T6_LEATHER": {
+      "item_id": "T6_LEATHER",
+      "tier": 6,
+      "en_name": "Worked Leather",
+      "category": "refined_resource",
+      "resource_type": "leather",
+      "recipe": {
+        "hide_tier": 6,
+        "hide_qty": 4,
+        "lower_leather_tier": 5,
+        "lower_leather_qty": 1
+      }
+    },
+    "T7_LEATHER": {
+      "item_id": "T7_LEATHER",
+      "tier": 7,
+      "en_name": "Cured Leather",
+      "category": "refined_resource",
+      "resource_type": "leather",
+      "recipe": {
+        "hide_tier": 7,
+        "hide_qty": 5,
+        "lower_leather_tier": 6,
+        "lower_leather_qty": 1
+      }
+    },
+    "T8_LEATHER": {
+      "item_id": "T8_LEATHER",
+      "tier": 8,
+      "en_name": "Hardened Leather",
+      "category": "refined_resource",
+      "resource_type": "leather",
+      "recipe": {
+        "hide_tier": 8,
+        "hide_qty": 5,
+        "lower_leather_tier": 7,
+        "lower_leather_qty": 1
       }
     }
   },

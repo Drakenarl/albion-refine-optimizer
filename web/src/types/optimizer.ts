@@ -8,6 +8,14 @@ export type SellStrategy = 'instant_sell' | 'sell_order'
 export type FreshnessLevel = 'fresh' | 'warning' | 'critical' | 'unknown'
 export type RecupMode = 'local' | 'with-planks'
 export type SourcingMode = 'market' | 'production'
+export type ResourceKind = 'wood' | 'hide'
+
+export interface ResourceOption {
+  kind: ResourceKind
+  display_raw: string
+  display_refined: string
+  refining_city: string
+}
 
 export type WarningCode =
   | 'ROUTE_ZONE_ROUGE'
@@ -71,6 +79,7 @@ export interface VenteBlock {
 export interface Route {
   rank: number
   tier: number
+  resource_kind: ResourceKind
   quantite: number
   achat_wood: SourcingLeg
   achat_plank: SourcingLeg | null
@@ -143,6 +152,7 @@ export interface OptimizeRequest {
   excluded_buy_cities?: string[]
   excluded_sell_cities?: string[]
   recup_mode?: RecupMode
+  resource?: ResourceKind
   top_n?: number
   server?: string
   use_cache?: boolean
@@ -154,4 +164,5 @@ export interface ConfigResponse {
   default_excluded: string[]
   seuil_marge_default: number
   servers: string[]
+  resources: ResourceOption[]
 }

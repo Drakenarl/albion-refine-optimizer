@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from albion_refine import config, market, refining
 from albion_refine.aodp_client import AodpClient
+from albion_refine.config import Resource, ResourceKind
 from albion_refine.models import (
     DiscardedRoute,
     FreshnessLevel,
@@ -75,8 +76,11 @@ class OptimizerParams(BaseModel):
     # Où la récupération RRR est vendue. ``WITH_PLANKS`` (défaut V2) est
     # réaliste : tu transportes déjà les planks vers leur ville de vente, tu
     # emmènes la récup avec. ``LOCAL`` reste possible pour comparaison honnête
-    # avec le comportement V1 (vente forcée à Fort Sterling).
+    # avec le comportement V1 (vente forcée à la ville specialite).
     recup_mode: RecupMode = RecupMode.WITH_PLANKS
+    # Filiere raffinee : bois (Fort Sterling) ou peau (Martlock). Ajoute en
+    # V2.2 pour supporter plusieurs matieres sans changer la logique metier.
+    resource: ResourceKind = ResourceKind.WOOD
     top_n: int = 3
 
     def buy_cities(self) -> list[str]:
@@ -86,6 +90,10 @@ class OptimizerParams(BaseModel):
     def sell_cities(self) -> list[str]:
         """Villes autorisées à la vente (toutes sauf les exclues)."""
         return [c for c in config.all_cities() if c not in self.excluded_sell_cities]
+
+    def resource_config(self) -> Resource:
+        """Retourne la ``Resource`` derivee de ``self.resource``."""
+        return config.resource(self.resource)
 
 
 QuoteIndex = dict[tuple[str, str], PriceQuote]
@@ -198,7 +206,7 @@ def _recuperation(
 def _recup_destination(params: OptimizerParams, sell_city: str) -> str:
     """Retourne la ville où la récupération RRR sera valorisée."""
     if params.recup_mode is RecupMode.LOCAL:
-        return config.REFINING_CITY
+        return params.resource_config().refining_city
     return sell_city
 
 
@@ -416,6 +424,7 @@ def _build_route(
 
     return Route(
         tier=tier,
+        resource_kind=params.resource,
         quantite=quantity,
         achat_wood=wood_leg,
         achat_plank=plank_leg,
@@ -487,19 +496,24 @@ def _build_checklist(
     """Construit la check-list des pages marché à rafraîchir (par ordre d'apparition)."""
     seen: set[tuple[str, str]] = set()
     checklist: list[RefreshChecklistItem] = []
+    res = params.resource_config()
     for route in routes:
         pairs = [
             (
                 route.achat_wood.item_id,
                 route.achat_wood.city,
-                "critique, le prix du bois structure le coût",
+                f"critique, le prix du {res.display_raw} structure le coût",
             ),
         ]
         if route.achat_plank is not None:
             pairs.append(
-                (route.achat_plank.item_id, route.achat_plank.city, "critique, prix du plank T-1")
+                (
+                    route.achat_plank.item_id,
+                    route.achat_plank.city,
+                    f"critique, prix du {res.display_refined} T-1",
+                )
             )
-        pairs.append((config.plank_item_id(route.tier), route.vente.ville, "vente principale"))
+        pairs.append((res.refined_item_id(route.tier), route.vente.ville, "vente principale"))
         for item_id, city, role in pairs:
             if (item_id, city) in seen:
                 continue
@@ -524,10 +538,13 @@ def _build_checklist(
 
 def _discarded_report(route: Route, params: OptimizerParams) -> DiscardedRoute:
     """Convertit une route écartée en rapport lisible avec suggestions."""
-    plank_src = f" + plank T-1 @ {route.achat_plank.city}" if route.achat_plank else ""
+    res = params.resource_config()
+    plank_src = (
+        f" + {res.display_refined} T-1 @ {route.achat_plank.city}" if route.achat_plank else ""
+    )
     description = (
-        f"Bois T{route.tier} @ {route.achat_wood.city}{plank_src} "
-        f"→ raffinage {config.REFINING_CITY} → vente @ {route.vente.ville}"
+        f"{res.display_raw.capitalize()} T{route.tier} @ {route.achat_wood.city}{plank_src} "
+        f"→ raffinage {res.refining_city} → vente @ {route.vente.ville}"
     )
     return DiscardedRoute(
         description=description,
@@ -553,11 +570,11 @@ def _discarded_top(
     return [_discarded_report(route, params) for route in ordered[:n]]
 
 
-def _plank_input_item(tier: int) -> str | None:
-    """Retourne l'item ID du plank T-1 requis par la recette, ou ``None`` (T2)."""
+def _plank_input_item(tier: int, res: Resource) -> str | None:
+    """Retourne l'item ID du raffine T-1 requis par la recette, ou ``None`` (T2)."""
     if config.lower_plank_qty_per_plank(tier) == 0:
         return None
-    return config.plank_item_id(tier - 1)
+    return res.refined_item_id(tier - 1)
 
 
 def _plank_input_candidates(
@@ -614,9 +631,10 @@ def optimize(
     quotes = _index_quotes(quotes_list)
     volumes = _index_volumes(volumes_list)
 
-    wood_item = config.wood_item_id(params.tier)
-    plank_input_item = _plank_input_item(params.tier)
-    output_item = config.plank_item_id(params.tier)
+    res = params.resource_config()
+    wood_item = res.raw_item_id(params.tier)
+    plank_input_item = _plank_input_item(params.tier, res)
+    output_item = res.refined_item_id(params.tier)
 
     candidates: list[Route] = []
     for wood_city in params.buy_cities():
@@ -699,15 +717,17 @@ async def run_optimization(
     """
     # AODP fournit des timestamps UTC naïfs : on aligne notre référence dessus.
     reference = now or datetime.now(tz=UTC).replace(tzinfo=None)
-    wood_item = config.wood_item_id(params.tier)
-    plank_input_item = _plank_input_item(params.tier)
-    output_item = config.plank_item_id(params.tier)
+    res = params.resource_config()
+    wood_item = res.raw_item_id(params.tier)
+    plank_input_item = _plank_input_item(params.tier, res)
+    output_item = res.refined_item_id(params.tier)
 
     items = [item for item in (wood_item, plank_input_item, output_item) if item is not None]
     all_buy = sorted(set(params.buy_cities()) | set(params.sell_cities()))
     # Les volumes servent à la fill probability (planks de sortie) et à estimer
-    # la profondeur des buy orders pour la récupération RRR (inputs à FS).
-    history_cities = sorted({*params.sell_cities(), config.REFINING_CITY})
+    # la profondeur des buy orders pour la récupération RRR (inputs à la ville
+    # specialite : Fort Sterling pour le bois, Martlock pour la peau).
+    history_cities = sorted({*params.sell_cities(), res.refining_city})
     async with AodpClient(server=server, use_cache=use_cache) as client:
         quotes = await client.get_prices(items, all_buy)
         volumes = await client.get_history(items, history_cities)

@@ -8,10 +8,20 @@ import WarningBadge from './WarningBadge'
 import { cn } from '../lib/cn'
 import { fmtPct, fmtSilver } from '../lib/format'
 import { fadeUp } from '../lib/motion'
-import type { Route, SourcingLeg } from '../types/optimizer'
+import type { ResourceKind, Route, SourcingLeg } from '../types/optimizer'
 
 interface Props {
   route: Route
+}
+
+// Libelles FR par ressource, cales sur config.RESOURCES cote backend. Duplique
+// ici pour eviter un round-trip API supplementaire ; a garder en sync.
+const RESOURCE_LABELS: Record<
+  ResourceKind,
+  { raw: string; refined: string; refiningCity: string }
+> = {
+  wood: { raw: 'bois', refined: 'plank', refiningCity: 'Fort Sterling' },
+  hide: { raw: 'peau', refined: 'cuir', refiningCity: 'Martlock' },
 }
 
 const RECO_LABEL: Record<string, string> = {
@@ -25,6 +35,7 @@ const RouteCard: FC<Props> = ({ route }) => {
   const borderColor = positive ? 'border-positive/40' : 'border-negative/40'
   const roiTone = positive ? 'text-positive' : 'text-negative'
   const TrendIcon = positive ? TrendingUp : TrendingDown
+  const labels = RESOURCE_LABELS[route.resource_kind] ?? RESOURCE_LABELS.wood
 
   return (
     <motion.article
@@ -42,7 +53,7 @@ const RouteCard: FC<Props> = ({ route }) => {
               TOP {route.rank}
             </span>
             <span className="text-sm text-ink-muted">
-              Tier {route.tier} — {route.quantite} planks
+              Tier {route.tier} — {route.quantite} {labels.refined}s
             </span>
           </div>
           <div className={cn('flex items-center gap-2 text-sm font-semibold', roiTone)}>
@@ -72,27 +83,31 @@ const RouteCard: FC<Props> = ({ route }) => {
       <div className="grid gap-5 p-5 lg:grid-cols-2">
         {/* Colonne gauche : achat + raffinage + recup */}
         <section className="space-y-4">
-          <SourcingRow leg={route.achat_wood} icon={<ShoppingCart className="h-4 w-4" />} label="Achat bois" />
+          <SourcingRow
+            leg={route.achat_wood}
+            icon={<ShoppingCart className="h-4 w-4" />}
+            label={`Achat ${labels.raw}`}
+          />
           {route.achat_plank && (
             <SourcingRow
               leg={route.achat_plank}
               icon={<Package className="h-4 w-4" />}
-              label={`Achat plank T${route.achat_plank.tier}`}
+              label={`Achat ${labels.refined} T${route.achat_plank.tier}`}
             />
           )}
 
           <div className="rounded-lg border border-surface-border/60 bg-surface/60 p-3">
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
               <Factory className="h-4 w-4 text-primary-400" />
-              Raffinage — Fort Sterling
+              Raffinage — {labels.refiningCity}
             </div>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-ink-muted">
               <RowKV label="RRR effectif" value={`${(route.raffinage.rrr_effectif * 100).toFixed(1)}%`} />
               <RowKV label="Cout station" value={fmtSilver(route.raffinage.cout_station)} />
-              <RowKV label="Produits" value={`${route.raffinage.planks_produits} planks`} />
+              <RowKV label="Produits" value={`${route.raffinage.planks_produits} ${labels.refined}s`} />
               <RowKV
                 label="Retours RRR"
-                value={`${route.raffinage.wood_retour.toFixed(0)} bois + ${route.raffinage.plank_moins_1_retour.toFixed(0)} plank T-1`}
+                value={`${route.raffinage.wood_retour.toFixed(0)} ${labels.raw} + ${route.raffinage.plank_moins_1_retour.toFixed(0)} ${labels.refined} T-1`}
               />
               {route.raffinage.focus_utilise > 0 && (
                 <RowKV label="Focus" value={route.raffinage.focus_utilise.toFixed(0)} />
@@ -109,12 +124,12 @@ const RouteCard: FC<Props> = ({ route }) => {
               <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-ink-muted">
                 <RowKV label="Valeur nette" value={<span className="text-positive num">{fmtSilver(route.recup_totale)}</span>} />
                 <RowKV
-                  label="Absorption bois"
+                  label={`Absorption ${labels.raw}`}
                   value={`${route.recup_wood_absorbe} / ${route.recup_wood_demande}`}
                 />
                 {route.achat_plank && (
                   <RowKV
-                    label="Absorption planks T-1"
+                    label={`Absorption ${labels.refined}s T-1`}
                     value={`${route.recup_plank_absorbe} / ${route.recup_plank_demande}`}
                   />
                 )}

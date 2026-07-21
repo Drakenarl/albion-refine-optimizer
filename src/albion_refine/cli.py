@@ -16,6 +16,7 @@ from rich.console import Console
 
 from albion_refine import config, formatters
 from albion_refine.aodp_client import AodpClient, AodpError
+from albion_refine.config import ResourceKind
 from albion_refine.models import QuantityMode, RecupMode
 from albion_refine.optimizer import OptimizerParams, run_optimization
 
@@ -84,6 +85,7 @@ def _build_params(
     exclude_vente: list[str],
     exclude_achat: list[str],
     recup_mode: RecupMode,
+    resource: ResourceKind,
 ) -> OptimizerParams:
     """Assemble et valide les paramètres d'optimisation selon le mode choisi."""
     if mode is QuantityMode.CAPITAL and not capital:
@@ -110,6 +112,7 @@ def _build_params(
         excluded_buy_cities=list(config.DEFAULTS["excluded_buy_cities"]) + exclude_achat,
         excluded_sell_cities=list(config.DEFAULTS["excluded_sell_cities"]) + exclude_vente,
         recup_mode=recup_mode,
+        resource=resource,
     )
 
 
@@ -158,11 +161,22 @@ def optimize(
             "--recup-mode",
             help=(
                 "Où vendre la récup RRR. "
-                "'with-planks' (défaut) : dans la ville des planks (workflow réaliste). "
-                "'local' : à Fort Sterling (comportement V1, souvent défavorable)."
+                "'with-planks' (défaut) : dans la ville des raffinés (workflow réaliste). "
+                "'local' : dans la ville spécialité (comportement V1, souvent défavorable)."
             ),
         ),
     ] = RecupMode.WITH_PLANKS,
+    resource: Annotated[
+        ResourceKind,
+        typer.Option(
+            "--resource",
+            help=(
+                "Filière raffinée. 'wood' (défaut) : bois → planks à Fort Sterling. "
+                "'hide' : peau → cuir à Martlock. Même logique métier, seul l'item AODP "
+                "et la ville spécialité changent."
+            ),
+        ),
+    ] = ResourceKind.WOOD,
     exclude_vente: Annotated[
         list[str] | None, typer.Option("--exclude-vente", help="Ville à exclure de la vente.")
     ] = None,
@@ -194,6 +208,7 @@ def optimize(
         exclude_vente=exclude_vente or [],
         exclude_achat=exclude_achat or [],
         recup_mode=recup_mode,
+        resource=resource,
     )
 
     try:
@@ -213,13 +228,23 @@ def check_item_ids() -> None:
     """Vérifie que les item IDs codés en dur correspondent à ``items.json``."""
     data = config.load_items_data()
     ok = True
+    # Filiere bois -> planks
     for tier, item_id in config.WOOD_ITEM_IDS.items():
         present = item_id in data.get("wood", {})
-        console.print(f"bois  T{tier} : {item_id} {'✓' if present else '✗ ABSENT'}")
+        console.print(f"bois    T{tier} : {item_id} {'✓' if present else '✗ ABSENT'}")
         ok = ok and present
     for tier, item_id in config.PLANK_ITEM_IDS.items():
         present = item_id in data.get("planks", {})
-        console.print(f"plank T{tier} : {item_id} {'✓' if present else '✗ ABSENT'}")
+        console.print(f"plank   T{tier} : {item_id} {'✓' if present else '✗ ABSENT'}")
+        ok = ok and present
+    # Filiere peau -> cuir (ajoutee V2.2)
+    for tier, item_id in config.HIDE_ITEM_IDS.items():
+        present = item_id in data.get("hide", {})
+        console.print(f"peau    T{tier} : {item_id} {'✓' if present else '✗ ABSENT'}")
+        ok = ok and present
+    for tier, item_id in config.LEATHER_ITEM_IDS.items():
+        present = item_id in data.get("leather", {})
+        console.print(f"cuir    T{tier} : {item_id} {'✓' if present else '✗ ABSENT'}")
         ok = ok and present
     if not ok:
         raise typer.Exit(code=1)

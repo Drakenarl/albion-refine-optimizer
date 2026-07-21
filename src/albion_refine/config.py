@@ -13,8 +13,11 @@ application des corrections urgentes (nutrition en silver/100 nutrition).
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
+
+from albion_refine.models import ResourceKind as ResourceKind  # re-export explicite
 
 # ---------------------------------------------------------------------------
 # Tiers de raffinage supportés en V1
@@ -25,43 +28,75 @@ MAX_TIER: Final = 8
 SUPPORTED_TIERS: Final = tuple(range(MIN_TIER, MAX_TIER + 1))
 
 # ---------------------------------------------------------------------------
-# Item IDs AODP (voir SPEC section 6.1, confirmés contre items.json)
+# Ressources supportees (voir SPEC section 6.1 + extension V2.2 pour la peau)
 # ---------------------------------------------------------------------------
 
-WOOD_ITEM_IDS: Final[dict[int, str]] = {tier: f"T{tier}_WOOD" for tier in range(4, 9)}
 
-# Les planks vont du T3 (input plancher du T4) au T8 : pour raffiner un plank
-# de tier N il faut le plank T{N-1}, donc on doit connaître les IDs de T3 à T8.
+@dataclass(frozen=True)
+class Resource:
+    """Filiere de raffinage : IDs AODP, ville specialite, libelles FR.
+
+    Sert de source de verite unique pour paramerer l'optimiseur, la CLI, la
+    checklist et le rendu. Ajouter une filiere (fibre, minerai, pierre) =
+    ajouter une entree dans ``RESOURCES`` et zero changement dans la logique.
+    """
+
+    kind: ResourceKind
+    raw_prefix: str  # ex "WOOD" -> item id "T5_WOOD"
+    refined_prefix: str  # ex "PLANKS" -> item id "T5_PLANKS"
+    refining_city: str  # ville qui accorde +40% specialite
+    display_raw: str  # libelle FR de la matiere premiere (ex "bois")
+    display_refined: str  # libelle FR du raffine (ex "plank")
+
+    def raw_item_id(self, tier: int) -> str:
+        """Item ID AODP de la matiere premiere pour ``tier`` (ex ``T5_WOOD``)."""
+        return f"T{tier}_{self.raw_prefix}"
+
+    def refined_item_id(self, tier: int) -> str:
+        """Item ID AODP du raffine pour ``tier`` (ex ``T5_PLANKS``)."""
+        return f"T{tier}_{self.refined_prefix}"
+
+
+RESOURCES: Final[dict[ResourceKind, Resource]] = {
+    ResourceKind.WOOD: Resource(
+        kind=ResourceKind.WOOD,
+        raw_prefix="WOOD",
+        refined_prefix="PLANKS",
+        refining_city="Fort Sterling",
+        display_raw="bois",
+        display_refined="plank",
+    ),
+    ResourceKind.HIDE: Resource(
+        kind=ResourceKind.HIDE,
+        raw_prefix="HIDE",
+        refined_prefix="LEATHER",
+        refining_city="Martlock",
+        display_raw="peau",
+        display_refined="cuir",
+    ),
+}
+
+
+def resource(kind: ResourceKind | str) -> Resource:
+    """Retourne la ``Resource`` correspondant a un ``ResourceKind`` ou son slug."""
+    return RESOURCES[ResourceKind(kind)]
+
+
+# Alias historiques (bois par defaut) : conserves pour la retrocompatibilite
+# des tests V1/V2.0. Nouveaux appels : passer par ``resource(kind).raw_item_id``.
+WOOD_ITEM_IDS: Final[dict[int, str]] = {tier: f"T{tier}_WOOD" for tier in range(4, 9)}
 PLANK_ITEM_IDS: Final[dict[int, str]] = {tier: f"T{tier}_PLANKS" for tier in range(3, 9)}
+HIDE_ITEM_IDS: Final[dict[int, str]] = {tier: f"T{tier}_HIDE" for tier in range(4, 9)}
+LEATHER_ITEM_IDS: Final[dict[int, str]] = {tier: f"T{tier}_LEATHER" for tier in range(3, 9)}
 
 
 def wood_item_id(tier: int) -> str:
-    """Retourne l'item ID AODP du bois brut d'un tier donné.
-
-    Args:
-        tier: Tier du bois (4 à 8).
-
-    Returns:
-        L'identifiant AODP, par exemple ``"T7_WOOD"``.
-
-    Raises:
-        KeyError: Si le tier n'est pas supporté.
-    """
+    """[compat] Item ID du bois brut d'un tier. Prefer ``resource('wood').raw_item_id``."""
     return WOOD_ITEM_IDS[tier]
 
 
 def plank_item_id(tier: int) -> str:
-    """Retourne l'item ID AODP du plank raffiné d'un tier donné.
-
-    Args:
-        tier: Tier du plank (3 à 8).
-
-    Returns:
-        L'identifiant AODP, par exemple ``"T6_PLANKS"``.
-
-    Raises:
-        KeyError: Si le tier n'est pas supporté.
-    """
+    """[compat] Item ID du plank d'un tier. Prefer ``resource('wood').refined_item_id``."""
     return PLANK_ITEM_IDS[tier]
 
 
@@ -123,7 +158,9 @@ CITIES: Final[dict[str, dict[str, Any]]] = {
     "Brecilien": {"safe": True, "excluded_default": True},
 }
 
-# Ville de raffinage imposée pour le bois.
+# [compat] Ville de raffinage historique (bois). Depuis V2.2, chaque
+# ``Resource`` porte sa propre ``refining_city`` : bois -> Fort Sterling,
+# peau -> Martlock. A n'utiliser que dans les chemins de code non parametres.
 REFINING_CITY: Final = "Fort Sterling"
 
 # Ville dont une route déclenche le flag « zone rouge ».
@@ -144,10 +181,14 @@ def safe_cities() -> list[str]:
 # Bonus de Resource Return Rate à Fort Sterling (voir SPEC section 3.2 / 7.1)
 # ---------------------------------------------------------------------------
 
-CITY_BONUS_PCT: Final = 18  # bonus général de la ville
-WOOD_SPECIALTY_BONUS_PCT: Final = 40  # spécialité bois de Fort Sterling
-BASE_REFINING_BONUS_PCT: Final = CITY_BONUS_PCT + WOOD_SPECIALTY_BONUS_PCT  # 58
-FOCUS_BONUS_PCT: Final = 59  # bonus apporté par le focus
+CITY_BONUS_PCT: Final = 18  # bonus general de la ville de raffinage
+# Le bonus specialite +40% est le meme pour toutes les filieres (bois a Fort
+# Sterling, peau a Martlock, fibre a Lymhurst, etc.), a condition de raffiner
+# dans la ville dediee. Le nom garde "WOOD" pour compat mais s'applique a toutes.
+SPECIALTY_BONUS_PCT: Final = 40
+WOOD_SPECIALTY_BONUS_PCT: Final = SPECIALTY_BONUS_PCT  # [compat]
+BASE_REFINING_BONUS_PCT: Final = CITY_BONUS_PCT + SPECIALTY_BONUS_PCT  # 58
+FOCUS_BONUS_PCT: Final = 59  # bonus apporte par le focus
 
 # Daily bonus autorisés (affichés en jeu dans le menu Activités).
 ALLOWED_DAILY_BONUS_PCT: Final = (0, 10, 20)

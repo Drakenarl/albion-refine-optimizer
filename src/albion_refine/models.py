@@ -44,6 +44,18 @@ class SourcingMode(StrEnum):
     PRODUCTION = "production"
 
 
+class ResourceKind(StrEnum):
+    """Filiere de raffinage supportee (miroir de ``config.ResourceKind``).
+
+    Definie ici en plus de ``config`` pour eviter qu'un modele importe
+    ``config`` (couche superieure). Les deux enums partagent les memes valeurs
+    de slug (``wood``, ``hide``), et ``config.resource(kind)`` accepte les deux.
+    """
+
+    WOOD = "wood"
+    HIDE = "hide"
+
+
 class FreshnessLevel(StrEnum):
     """Niveau de fraîcheur d'un prix AODP."""
 
@@ -270,6 +282,8 @@ class Route(BaseModel):
     rank: int = 0
     tier: int
     quantite: int
+    # Filiere raffinee (V2.2). Defaut wood pour retrocompat V1/V2.0/V2.1.
+    resource_kind: ResourceKind = ResourceKind.WOOD
     achat_wood: SourcingLeg
     # ``None`` quand la recette ne consomme pas de plank T-1 (cas du T2).
     achat_plank: SourcingLeg | None = None

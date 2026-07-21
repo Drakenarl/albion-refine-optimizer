@@ -1,7 +1,13 @@
 import { useState, type FC, type FormEvent } from 'react'
 
 import { cn } from '../lib/cn'
-import type { ConfigResponse, OptimizeRequest, QuantityMode, RecupMode } from '../types/optimizer'
+import type {
+  ConfigResponse,
+  OptimizeRequest,
+  QuantityMode,
+  RecupMode,
+  ResourceKind,
+} from '../types/optimizer'
 
 interface Props {
   config: ConfigResponse
@@ -20,6 +26,7 @@ interface FormState {
   seuilMarge: string
   recupMode: RecupMode
   server: string
+  resource: ResourceKind
 }
 
 const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
@@ -34,7 +41,11 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
     seuilMarge: String(config.seuil_marge_default),
     recupMode: 'with-planks',
     server: 'europe',
+    resource: 'wood',
   })
+
+  const currentResource =
+    config.resources.find((r) => r.kind === state.resource) ?? config.resources[0]
 
   const patch = <K extends keyof FormState>(key: K, value: FormState[K]): void => {
     setState((prev) => ({ ...prev, [key]: value }))
@@ -50,6 +61,7 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
       seuil_marge_min_pct: Number(state.seuilMarge),
       recup_mode: state.recupMode,
       server: state.server,
+      resource: state.resource,
     }
     if (state.mode === 'capital') payload.capital = Number(state.capital)
     if (state.mode === 'fixed') payload.quantite = Number(state.quantite)
@@ -63,6 +75,27 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
       className="rounded-xl bg-surface-raised border border-surface-border p-6 shadow-card"
     >
       <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2 lg:grid-cols-3">
+        <Field
+          label="Ressource"
+          hint={
+            currentResource
+              ? `Raffinage a ${currentResource.refining_city}`
+              : undefined
+          }
+        >
+          <select
+            value={state.resource}
+            onChange={(e) => patch('resource', e.target.value as ResourceKind)}
+            className={selectClass}
+          >
+            {config.resources.map((r) => (
+              <option key={r.kind} value={r.kind}>
+                {capitalize(r.display_raw)} → {r.display_refined}
+              </option>
+            ))}
+          </select>
+        </Field>
+
         <Field label="Tier">
           <select
             value={state.tier}
@@ -220,5 +253,9 @@ const Field: FC<FieldProps> = ({ label, hint, children }) => (
 const inputClass =
   'h-10 rounded-lg border border-surface-border bg-surface px-3 text-sm text-ink placeholder:text-ink-faint transition hover:border-slate-500'
 const selectClass = inputClass
+
+function capitalize(s: string): string {
+  return s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1)
+}
 
 export default OptimizeForm

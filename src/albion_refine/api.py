@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from albion_refine import config
 from albion_refine.aodp_client import AodpError
+from albion_refine.config import ResourceKind
 from albion_refine.models import OptimizationResult, QuantityMode, RecupMode
 from albion_refine.optimizer import OptimizerParams, run_optimization
 
@@ -73,9 +74,19 @@ class OptimizeRequest(BaseModel):
     excluded_buy_cities: list[str] = []
     excluded_sell_cities: list[str] = []
     recup_mode: RecupMode = RecupMode.WITH_PLANKS
+    resource: ResourceKind = ResourceKind.WOOD
     top_n: int = 3
     server: str = "europe"
     use_cache: bool = True
+
+
+class ResourceOption(BaseModel):
+    """Filiere raffinee exposee au frontend (peuple le selecteur)."""
+
+    kind: ResourceKind
+    display_raw: str
+    display_refined: str
+    refining_city: str
 
 
 class ConfigResponse(BaseModel):
@@ -86,6 +97,7 @@ class ConfigResponse(BaseModel):
     default_excluded: list[str]
     seuil_marge_default: float
     servers: list[str]
+    resources: list[ResourceOption]
 
 
 @app.get("/api/health")
@@ -96,13 +108,22 @@ def health() -> dict[str, str]:
 
 @app.get("/api/config", response_model=ConfigResponse)
 def get_config() -> ConfigResponse:
-    """Constantes UI-friendly (tiers, villes, défauts). Alimente les dropdowns."""
+    """Constantes UI-friendly (tiers, villes, ressources, défauts). Alimente les dropdowns."""
     return ConfigResponse(
         tiers=list(config.SUPPORTED_TIERS),
         cities=config.all_cities(),
         default_excluded=list(config.DEFAULTS["excluded_buy_cities"]),
         seuil_marge_default=float(config.DEFAULTS["seuil_marge_min_pct"]),
         servers=list(config.AODP_BASE_URLS.keys()),
+        resources=[
+            ResourceOption(
+                kind=res.kind,
+                display_raw=res.display_raw,
+                display_refined=res.display_refined,
+                refining_city=res.refining_city,
+            )
+            for res in config.RESOURCES.values()
+        ],
     )
 
 
