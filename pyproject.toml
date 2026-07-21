@@ -29,6 +29,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+api = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+]
 dev = [
     "pytest>=8.2.0",
     "pytest-httpx>=0.30.0",
@@ -36,10 +40,13 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "ruff>=0.4.0",
     "mypy>=1.10.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
 ]
 
 [project.scripts]
 albion-refine = "albion_refine.cli:app"
+albion-refine-api = "albion_refine.api:run"
 
 [project.urls]
 Homepage = "https://github.com/Drakenarl/albion-refine-optimizer"
