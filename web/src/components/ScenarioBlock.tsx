@@ -2,8 +2,10 @@ import type { FC } from 'react'
 import { Clock, Zap } from 'lucide-react'
 
 import FreshnessBadge from './FreshnessBadge'
+import InfoTooltip from './InfoTooltip'
 import { cn } from '../lib/cn'
 import { fmtPct, fmtSilver } from '../lib/format'
+import { GLOSSARY } from '../lib/glossary'
 import type { FreshnessLevel, SalesScenario } from '../types/optimizer'
 
 interface Props {
@@ -59,7 +61,12 @@ const ScenarioBlock: FC<Props> = ({ scenario, slot }) => {
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-semibold">
           {icon}
-          {title}
+          <span className="inline-flex items-center gap-1">
+            {title}
+            <InfoTooltip>
+              {isInstant ? GLOSSARY.instant_sell : GLOSSARY.sell_order}
+            </InfoTooltip>
+          </span>
         </div>
         <FreshnessBadge
           level={classifyAge(scenario.data_age_hours)}
@@ -72,9 +79,14 @@ const ScenarioBlock: FC<Props> = ({ scenario, slot }) => {
         <Row
           label={isInstant ? 'Top buy' : `Undercut ${scenario.prix_unitaire_ref.toFixed(0)} s`}
           value={
-            isInstant
-              ? `${scenario.prix_unitaire_ref.toFixed(0)} s x ${scenario.planks}`
-              : `fill proba ${(scenario.fill_proba * 100).toFixed(0)}%`
+            isInstant ? (
+              `${scenario.prix_unitaire_ref.toFixed(0)} s x ${scenario.planks}`
+            ) : (
+              <span className="inline-flex items-center gap-1">
+                fill proba {(scenario.fill_proba * 100).toFixed(0)}%
+                <InfoTooltip size={3}>{GLOSSARY.fill_proba}</InfoTooltip>
+              </span>
+            )
           }
         />
         <Row
@@ -82,7 +94,11 @@ const ScenarioBlock: FC<Props> = ({ scenario, slot }) => {
           value={fmtSilver(scenario.revenu_net)}
         />
         <Row
-          label="Confiance"
+          label={
+            <span className="inline-flex items-center gap-1">
+              Confiance <InfoTooltip size={3}>{GLOSSARY.freshness_factor}</InfoTooltip>
+            </span>
+          }
           value={`x${scenario.freshness_factor.toFixed(2)}`}
           dim
         />
@@ -135,7 +151,7 @@ const ScenarioBlock: FC<Props> = ({ scenario, slot }) => {
 }
 
 interface RowProps {
-  label: string
+  label: React.ReactNode
   value: React.ReactNode
   emphasis?: boolean
   dim?: boolean

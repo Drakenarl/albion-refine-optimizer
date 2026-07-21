@@ -52,7 +52,7 @@ const App: FC = () => {
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Albion Refine Optimizer</h1>
             <p className="mt-0.5 text-xs text-ink-muted">
-              Raffinage bois — Fort Sterling · V2
+              Raffinage bois &amp; peau · Fort Sterling / Martlock · V2.2
             </p>
           </div>
           <a

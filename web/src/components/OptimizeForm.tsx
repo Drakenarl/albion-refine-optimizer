@@ -1,6 +1,8 @@
 import { useState, type FC, type FormEvent } from 'react'
 
+import InfoTooltip from './InfoTooltip'
 import { cn } from '../lib/cn'
+import { GLOSSARY } from '../lib/glossary'
 import type {
   ConfigResponse,
   OptimizeRequest,
@@ -117,12 +119,19 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
             className={selectClass}
           >
             <option value="capital">Capital (silver disponible)</option>
-            <option value="fixed">Quantité fixe (bois)</option>
+            <option value="fixed">Quantité fixe</option>
             <option value="focus">Focus (budget focus)</option>
           </select>
         </Field>
 
-        <Field label="Station rate (silver / 100 nutrition)">
+        <Field
+          label={
+            <span className="inline-flex items-center gap-1">
+              Station rate (silver / 100 nutrition)
+              <InfoTooltip>{GLOSSARY.station_rate}</InfoTooltip>
+            </span>
+          }
+        >
           <input
             type="number"
             value={state.stationRate}
@@ -146,7 +155,7 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
           </Field>
         )}
         {state.mode === 'fixed' && (
-          <Field label="Quantité de bois brut">
+          <Field label={`Quantité de ${currentResource?.display_raw ?? 'brut'} brut`}>
             <input
               type="number"
               value={state.quantite}
@@ -170,7 +179,15 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
           </Field>
         )}
 
-        <Field label="Seuil ROI min (%)" hint="0 = toute route rentable retenue">
+        <Field
+          label={
+            <span className="inline-flex items-center gap-1">
+              Seuil ROI min (%)
+              <InfoTooltip>{GLOSSARY.seuil_roi}</InfoTooltip>
+            </span>
+          }
+          hint="0 = toute route rentable retenue"
+        >
           <input
             type="number"
             value={state.seuilMarge}
@@ -180,14 +197,23 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
           />
         </Field>
 
-        <Field label="Mode récup RRR">
+        <Field
+          label={
+            <span className="inline-flex items-center gap-1">
+              Mode récup RRR
+              <InfoTooltip width="lg">{GLOSSARY.mode_recup}</InfoTooltip>
+            </span>
+          }
+        >
           <select
             value={state.recupMode}
             onChange={(e) => patch('recupMode', e.target.value as RecupMode)}
             className={selectClass}
           >
             <option value="with-planks">with-planks (recommandé)</option>
-            <option value="local">local (vente forcée à FS)</option>
+            <option value="local">
+              local (vente forcée à {currentResource?.refining_city ?? 'la ville de raffinage'})
+            </option>
           </select>
         </Field>
 
@@ -237,7 +263,7 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
 }
 
 interface FieldProps {
-  label: string
+  label: React.ReactNode
   hint?: string
   children: React.ReactNode
 }

@@ -3,10 +3,12 @@ import { motion } from 'framer-motion'
 import { ArrowRight, Factory, Package, ShoppingCart, Sparkles, TrendingDown, TrendingUp } from 'lucide-react'
 
 import FreshnessBadge from './FreshnessBadge'
+import InfoTooltip from './InfoTooltip'
 import ScenarioBlock from './ScenarioBlock'
 import WarningBadge from './WarningBadge'
 import { cn } from '../lib/cn'
 import { fmtPct, fmtSilver } from '../lib/format'
+import { GLOSSARY } from '../lib/glossary'
 import { fadeUp } from '../lib/motion'
 import type { ResourceKind, Route, SourcingLeg } from '../types/optimizer'
 
@@ -58,7 +60,10 @@ const RouteCard: FC<Props> = ({ route }) => {
           </div>
           <div className={cn('flex items-center gap-2 text-sm font-semibold', roiTone)}>
             <TrendIcon className="h-4 w-4" />
-            ROI capital {fmtPct(route.marge_pct)}
+            <span className="inline-flex items-center gap-1">
+              ROI capital <InfoTooltip>{GLOSSARY.roi_capital}</InfoTooltip>
+            </span>
+            {fmtPct(route.marge_pct)}
           </div>
         </div>
         <div className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
@@ -102,7 +107,14 @@ const RouteCard: FC<Props> = ({ route }) => {
               Raffinage — {labels.refiningCity}
             </div>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-ink-muted">
-              <RowKV label="RRR effectif" value={`${(route.raffinage.rrr_effectif * 100).toFixed(1)}%`} />
+              <RowKV
+                label={
+                  <span className="inline-flex items-center gap-1">
+                    RRR effectif <InfoTooltip>{GLOSSARY.rrr_effectif}</InfoTooltip>
+                  </span>
+                }
+                value={`${(route.raffinage.rrr_effectif * 100).toFixed(1)}%`}
+              />
               <RowKV label="Cout station" value={fmtSilver(route.raffinage.cout_station)} />
               <RowKV label="Produits" value={`${route.raffinage.planks_produits} ${labels.refined}s`} />
               <RowKV
@@ -119,7 +131,10 @@ const RouteCard: FC<Props> = ({ route }) => {
             <div className="rounded-lg border border-positive/20 bg-positive/5 p-3">
               <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-positive">
                 <Sparkles className="h-4 w-4" />
-                Recup @ {route.recup_city}
+                <span className="inline-flex items-center gap-1">
+                  Recup @ {route.recup_city}
+                  <InfoTooltip>{GLOSSARY.recup_rrr}</InfoTooltip>
+                </span>
               </div>
               <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-ink-muted">
                 <RowKV label="Valeur nette" value={<span className="text-positive num">{fmtSilver(route.recup_totale)}</span>} />
@@ -148,7 +163,9 @@ const RouteCard: FC<Props> = ({ route }) => {
           <ScenarioBlock scenario={route.vente.scenario_b_sell_order} slot="b" />
           {route.silver_par_focus !== null && (
             <div className="rounded-md border border-surface-border/60 bg-surface/40 px-3 py-2 text-xs text-ink-muted">
-              <span className="text-ink-faint">Silver / focus : </span>
+              <span className="text-ink-faint inline-flex items-center gap-1">
+                Silver / focus <InfoTooltip>{GLOSSARY.silver_par_focus}</InfoTooltip> :
+              </span>{' '}
               <span className="num text-ink">{route.silver_par_focus.toFixed(2)} s</span>
             </div>
           )}
@@ -164,8 +181,9 @@ const RouteCard: FC<Props> = ({ route }) => {
               {RECO_LABEL[route.vente.recommandation] ?? route.vente.recommandation}
             </span>
           </div>
-          <div className="text-xs text-ink-faint">
-            marge efficacite (V1 secondaire) :{' '}
+          <div className="text-xs text-ink-faint inline-flex items-center gap-1">
+            marge efficacite (V1 secondaire)
+            <InfoTooltip>{GLOSSARY.marge_efficacite}</InfoTooltip> :{' '}
             <span className="num text-ink-muted">{fmtPct(route.marge_efficacite_pct)}</span>
           </div>
         </div>
@@ -221,7 +239,7 @@ const Metric: FC<MetricProps> = ({ label, value, dim }) => (
 )
 
 interface RowKVProps {
-  label: string
+  label: React.ReactNode
   value: React.ReactNode
 }
 
