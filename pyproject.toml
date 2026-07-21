@@ -60,6 +60,13 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/albion_refine"]
 
+# ==================== Vercel ====================
+# Pointeur explicite pour le runtime Python de Vercel : indique ou trouver
+# l'application FastAPI a servir. Utile en complement de api/index.py, evite
+# les ambiguites du detecteur statique de Vercel.
+[tool.vercel]
+entrypoint = "albion_refine.api:app"
+
 # ==================== Ruff ====================
 [tool.ruff]
 target-version = "py311"
