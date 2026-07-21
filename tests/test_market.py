@@ -74,18 +74,26 @@ class TestWalkBookDescending:
 
 class TestRecoveryValue:
     def test_recovery_walks_buy_book(self) -> None:
-        recovery = market.compute_recovery_value(28, [(1000.0, 100)])
+        recovery = market.compute_recovery_value(28, [(1000.0, 100)], data_age_hours=0.1)
         assert recovery.absorbe == 28
         assert recovery.demande == 28
         assert recovery.partielle is False
         assert recovery.valeur == pytest.approx(28 * 1000.0 * 0.92)
 
     def test_recovery_partial_when_stack_insufficient(self) -> None:
-        recovery = market.compute_recovery_value(28, [(1000.0, 15)])
+        recovery = market.compute_recovery_value(28, [(1000.0, 15)], data_age_hours=0.1)
         assert recovery.absorbe == 15
         assert recovery.demande == 28
         assert recovery.partielle is True
         assert recovery.valeur == pytest.approx(15 * 1000.0 * 0.92)
+
+    def test_recovery_discounts_stale_buy_max(self) -> None:
+        frais = market.compute_recovery_value(28, [(1000.0, 100)], data_age_hours=0.1)
+        vieux = market.compute_recovery_value(28, [(1000.0, 100)], data_age_hours=13.0)
+        # Frais : facteur 1.00 ; > 6h : facteur 0.50 → deux fois moins.
+        assert vieux.valeur == pytest.approx(frais.valeur * 0.5)
+        # Le nombre absorbé ne change pas, seule la valeur est escomptée.
+        assert vieux.absorbe == frais.absorbe
 
     def test_recovery_zero_when_no_buy_order(self) -> None:
         recovery = market.compute_recovery_value(28, [])

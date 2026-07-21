@@ -115,6 +115,8 @@ class RecoveryResult(NamedTuple):
 def compute_recovery_value(
     quantity_returned: float,
     buy_orders: list[tuple[float, int]],
+    *,
+    data_age_hours: float | None = None,
 ) -> RecoveryResult:
     """Valorise les retours RRR en instant sell, carnet d'achat à l'appui.
 
@@ -124,20 +126,28 @@ def compute_recovery_value(
     que la part effectivement absorbable ; le reste reste en inventaire, non
     valorisé. Sans buy order, la récupération vaut 0 silver.
 
+    Depuis V2.1, ``data_age_hours`` applique le même facteur de confiance
+    fraîcheur qu'aux ventes principales : un carnet vieux de 13h avec un prix
+    élevé gonflait artificiellement la récup et faisait remonter des villes
+    dont le carnet est peut-être fantôme.
+
     Args:
         quantity_returned: Quantité retournée par le RRR (arrondie à l'entier
             inférieur : on ne revend pas une fraction d'unité).
         buy_orders: Carnet de buy orders ``(prix, stack)`` dans la ville de
             raffinage, du meilleur prix au moins bon.
+        data_age_hours: Âge du ``buy_max`` en heures. ``None`` = inconnu, traité
+            comme très vieux (facteur 0.50).
 
     Returns:
-        Un ``RecoveryResult`` avec la valeur nette de taxe, la quantité
-        absorbée et la quantité demandée.
+        Un ``RecoveryResult`` avec la valeur nette de taxe (et escomptée par
+        la fraîcheur), la quantité absorbée et la quantité demandée.
     """
     demande = int(quantity_returned)
     walk = walk_book_descending(buy_orders, demande)
+    facteur = freshness_confidence_factor(data_age_hours)
     return RecoveryResult(
-        valeur=apply_instant_sell_tax(walk.total_cost),
+        valeur=apply_instant_sell_tax(walk.total_cost) * facteur,
         absorbe=walk.total_absorbed,
         demande=demande,
     )

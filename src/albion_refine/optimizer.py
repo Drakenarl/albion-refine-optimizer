@@ -160,6 +160,7 @@ def _recuperation(
     volume: VolumeData | None,
     retour: float,
     ignore: bool,
+    now: datetime,
 ) -> market.RecoveryResult:
     """Valorise les retours RRR en instant sell dans la ville de vente choisie.
 
@@ -169,13 +170,17 @@ def _recuperation(
     supposer une profondeur infinie (choix conservateur, SPEC_FIX 5.3).
 
     En V2, la ville n'est plus figée à Fort Sterling : elle dépend de
-    ``recup_mode`` et est choisie par ``_recup_destination``.
+    ``recup_mode`` et est choisie par ``_recup_destination``. L'âge du
+    ``buy_max`` est propagé pour appliquer le facteur de confiance fraîcheur
+    (V2.1), sans quoi un carnet vieux de 13h avec un prix élevé gonflerait
+    artificiellement la récup et biaiserait le choix de la ville de vente.
 
     Args:
         quote: Prix de l'item dans la ville où la récup sera vendue.
         volume: Volume 24h de l'item dans cette ville (profondeur estimée).
         retour: Quantité retournée par le RRR.
         ignore: Vrai pour désactiver complètement la récupération.
+        now: Instant de référence pour calculer l'âge du ``buy_max``.
 
     Returns:
         Un ``RecoveryResult`` (valeur nette de taxe, quantité absorbée/demandée).
@@ -185,7 +190,9 @@ def _recuperation(
         return market.RecoveryResult(valeur=0.0, absorbe=0, demande=demande)
     profondeur = int(volume.total_volume_24h) if volume is not None else 0
     book = [(float(quote.buy_price_max), profondeur)]
-    return market.compute_recovery_value(retour, book)
+    return market.compute_recovery_value(
+        retour, book, data_age_hours=market.age_hours(quote.buy_max_age(now))
+    )
 
 
 def _recup_destination(params: OptimizerParams, sell_city: str) -> str:
@@ -354,6 +361,7 @@ def _build_route(
         volumes.get((wood_quote.item_id, recup_city)),
         refined.wood_retour,
         params.ignore_recup,
+        now,
     )
     recup_plank = (
         _recuperation(
@@ -361,6 +369,7 @@ def _build_route(
             volumes.get((plank_quote.item_id, recup_city)),
             refined.plank_moins_1_retour,
             params.ignore_recup,
+            now,
         )
         if plank_quote is not None
         else market.RecoveryResult(valeur=0.0, absorbe=0, demande=0)
