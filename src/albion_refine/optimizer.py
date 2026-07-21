@@ -538,7 +538,7 @@ def _discarded_report(route: Route, params: OptimizerParams) -> DiscardedRoute:
             f"ROI capital {route.marge_pct:.1f}% < seuil {params.seuil_marge_min_pct:.0f}%"
         ),
         suggestions=[
-            f"Baisser --seuil-marge à {math.floor(route.marge_pct)} pour voir cette route",
+            f"Baisser le seuil ROI à {math.floor(route.marge_pct)}% pour voir cette route",
             "Attendre un rafraîchissement des prix (données trop vieilles)",
             "Essayer un autre tier",
         ],

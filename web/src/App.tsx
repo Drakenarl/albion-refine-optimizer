@@ -1,7 +1,7 @@
 import { useEffect, useState, type FC } from 'react'
 import { AxiosError } from 'axios'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, PackageSearch } from 'lucide-react'
+import { AlertTriangle, Loader2, PackageSearch } from 'lucide-react'
 
 import AlternativesList from './components/AlternativesList'
 import ChecklistPanel from './components/ChecklistPanel'
@@ -127,17 +127,27 @@ interface ResultProps {
 const ResultSection: FC<ResultProps> = ({ result, seuil }) => {
   const { routes, discarded_top } = result
   const hasRoutes = routes.length > 0
+  const profitable = routes.filter((r) => r.marge_pct > 0).length
+  const losing = routes.length - profitable
+  const allLosing = losing > 0 && profitable === 0
+
+  const heading = (() => {
+    if (!hasRoutes) return 'Aucune route retenue'
+    if (allLosing) {
+      return `${routes.length} route${routes.length > 1 ? 's' : ''} au-dessus du seuil — toutes deficitaires`
+    }
+    if (losing === 0) {
+      return `${routes.length} route${routes.length > 1 ? 's' : ''} rentable${routes.length > 1 ? 's' : ''}`
+    }
+    return `${routes.length} routes retenues (${profitable} rentable${profitable > 1 ? 's' : ''}, ${losing} deficitaire${losing > 1 ? 's' : ''})`
+  })()
 
   return (
     <section className="space-y-6">
       <header className="flex items-baseline gap-3">
         <PackageSearch className="h-5 w-5 text-primary-400" />
         <div>
-          <h2 className="text-lg font-semibold">
-            {hasRoutes
-              ? `${routes.length} route${routes.length > 1 ? 's' : ''} rentable${routes.length > 1 ? 's' : ''}`
-              : 'Aucune route rentable'}
-          </h2>
+          <h2 className="text-lg font-semibold">{heading}</h2>
           <p className="text-xs text-ink-muted">
             Tier {result.run_metadata.tier} — analysees a{' '}
             {new Date(result.run_metadata.timestamp).toLocaleTimeString('fr-FR', {
@@ -147,6 +157,23 @@ const ResultSection: FC<ResultProps> = ({ result, seuil }) => {
           </p>
         </div>
       </header>
+
+      {allLosing && (
+        <div className="flex items-start gap-3 rounded-lg border border-caution/40 bg-caution/10 px-4 py-3 text-sm">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-caution" />
+          <div className="text-ink">
+            Ton seuil est de{' '}
+            <span className="num font-semibold">
+              {seuil >= 0 ? '+' : ''}
+              {seuil}%
+            </span>{' '}
+            — c'est un plancher, pas un objectif. Les routes affichees passent ce plancher mais
+            ont toutes une ROI capital{' '}
+            <span className="text-negative">negative</span> : elles te feront perdre du silver.
+            Remonter le seuil a <span className="num">0%</span> pour ne voir que du rentable.
+          </div>
+        </div>
+      )}
 
       {hasRoutes ? (
         <motion.div
