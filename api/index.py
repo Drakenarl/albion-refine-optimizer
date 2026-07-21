@@ -3,16 +3,19 @@
 Vercel decouvre ce fichier grace au dossier ``api/`` et route ``/api/*`` vers
 son runtime Python 3.12.
 
-Comment ``albion_refine`` est resolu :
-- Le buildCommand copie ``src/albion_refine`` dans ``api/albion_refine``, donc
-  le paquet est physiquement a cote de ce fichier au moment du packaging.
-- ``sys.path`` inclut explicitement le dossier de ce fichier.
-- L'import se resout localement, sans dependre de includeFiles ni du pip
-  install du paquet local.
+Structure imposee par les contraintes Vercel :
+1. L'analyseur statique de Vercel exige un ``app = FastAPI(...)`` litteral
+   au top-level du module. Un import dans un try/except ne compte pas.
+2. Le runtime demande a ce que l'app fonctionne vraiment. On tente d'importer
+   la vraie app (``albion_refine.api``) et on la substitue au placeholder si
+   ca marche.
+3. Si l'import echoue, on garde le placeholder et on lui attache des
+   endpoints ``/api/health`` et ``/api/debug`` qui reportent l'erreur en JSON,
+   pour eviter les FUNCTION_INVOCATION_FAILED opaques.
 
-En cas d'echec d'import, on expose un app FastAPI minimal qui reporte
-l'erreur en JSON via GET /api/debug. Evite de boucler sur les
-FUNCTION_INVOCATION_FAILED opaques de Vercel.
+``albion_refine`` est resolu localement : le buildCommand copie
+``src/albion_refine`` dans ``api/albion_refine`` avant le packaging, et
+``sys.path`` inclut le dossier de ce fichier.
 """
 
 from __future__ import annotations
@@ -22,6 +25,12 @@ import sys
 import traceback
 from pathlib import Path
 
+from fastapi import FastAPI
+
+# --- Etape 1 : placeholder litteral (obligatoire pour l'analyseur Vercel) ---
+app: FastAPI = FastAPI(title="Albion Refine API — booting")
+
+# --- Etape 2 : setup sys.path + tentative d'import de la vraie app ---
 _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
@@ -30,22 +39,26 @@ _boot_error: BaseException | None = None
 _boot_traceback: str | None = None
 
 try:
-    from albion_refine.api import app  # noqa: E402
-except BaseException as _e:  # noqa: BLE001 (on veut vraiment tout attraper)
-    _boot_error = _e
+    from albion_refine.api import app as _real_app  # noqa: E402
+
+    app = _real_app  # remplace le placeholder par la vraie app
+except BaseException as _exc:  # noqa: BLE001 (on veut vraiment tout attraper au boot)
+    _boot_error = _exc
     _boot_traceback = traceback.format_exc()
 
-    # App de secours : renvoie 200 mais reporte l'erreur exacte au frontend.
-    from fastapi import FastAPI  # noqa: E402
-
-    app = FastAPI(title="Albion Refine API — boot failed")
+    # Le placeholder reste actif : on lui attache des endpoints de diagnostic
+    # accessibles en JSON via le navigateur, ce que Vercel ne fait pas nativement.
 
     @app.get("/api/health")
     def _health_fallback() -> dict[str, object]:
-        return {"status": "boot_failed", "error": str(_boot_error)}
+        return {
+            "status": "boot_failed",
+            "error": str(_boot_error),
+            "hint": "GET /api/debug pour le traceback complet",
+        }
 
     @app.get("/api/debug")
-    def _debug() -> dict[str, object]:
+    def _debug_fallback() -> dict[str, object]:
         return {
             "error": str(_boot_error),
             "traceback": _boot_traceback,
