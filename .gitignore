@@ -18,6 +18,10 @@ downloads/
 eggs/
 lib/
 lib64/
+# Exception : le dossier web/src/lib/ contient les helpers TS du frontend
+# (cn, format, motion). La regle Python "lib/" ci-dessus les captait a tort.
+!web/src/lib/
+!web/src/lib/**
 parts/
 sdist/
 var/

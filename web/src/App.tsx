@@ -1,21 +1,24 @@
 import { useEffect, useState, type FC } from 'react'
 import { AxiosError } from 'axios'
-import { Loader2 } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Loader2, PackageSearch } from 'lucide-react'
 
+import AlternativesList from './components/AlternativesList'
+import ChecklistPanel from './components/ChecklistPanel'
 import OptimizeForm from './components/OptimizeForm'
+import RouteCard from './components/RouteCard'
 import { fetchConfig, postOptimize } from './api/optimize'
+import { fadeIn, staggerContainer } from './lib/motion'
 import type {
   ConfigResponse,
   OptimizationResult,
   OptimizeRequest,
 } from './types/optimizer'
 
-// Session 1 : la page ne fait que valider le tuyau. Le rendu détaillé des
-// routes (RouteCard, badges, warnings) arrive en Session 2. Ici on affiche le
-// JSON brut renvoyé par le backend pour prouver le bout-en-bout.
 const App: FC = () => {
   const [config, setConfig] = useState<ConfigResponse | null>(null)
   const [result, setResult] = useState<OptimizationResult | null>(null)
+  const [lastPayload, setLastPayload] = useState<OptimizeRequest | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -29,6 +32,7 @@ const App: FC = () => {
     setLoading(true)
     setError(null)
     setResult(null)
+    setLastPayload(payload)
     try {
       const data = await postOptimize(payload)
       setResult(data)
@@ -39,61 +43,135 @@ const App: FC = () => {
     }
   }
 
+  const seuil = lastPayload?.seuil_marge_min_pct ?? config?.seuil_marge_default ?? 0
+
   return (
     <div className="min-h-screen bg-surface text-ink">
-      <header className="border-b border-surface-border">
-        <div className="mx-auto max-w-6xl px-6 py-6">
-          <h1 className="text-2xl font-semibold tracking-tight">Albion Refine Optimizer</h1>
-          <p className="mt-1 text-sm text-ink-muted">
-            Optimisation de raffinage bois — Fort Sterling · V2
+      <header className="border-b border-surface-border bg-surface-sunken/60 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Albion Refine Optimizer</h1>
+            <p className="mt-0.5 text-xs text-ink-muted">
+              Raffinage bois — Fort Sterling · V2
+            </p>
+          </div>
+          <a
+            href="https://github.com/Drakenarl/albion-refine-optimizer"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-ink-faint transition hover:text-ink"
+          >
+            GitHub ↗
+          </a>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl px-6 py-8">
+        {!config && !error && <BootLoading />}
+
+        {config && (
+          <div className="space-y-6">
+            <OptimizeForm config={config} loading={loading} onSubmit={handleOptimize} />
+
+            {error && (
+              <div className="rounded-lg border border-negative/40 bg-negative/10 px-4 py-3 text-sm text-negative">
+                {error}
+              </div>
+            )}
+
+            <AnimatePresence mode="wait">
+              {loading && (
+                <motion.div
+                  key="loading"
+                  variants={fadeIn}
+                  initial="hidden"
+                  animate="show"
+                  exit="hidden"
+                  className="flex items-center gap-2 text-sm text-ink-muted"
+                >
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  L'optimiseur interroge l'AODP…
+                </motion.div>
+              )}
+
+              {!loading && result && (
+                <motion.div
+                  key={result.run_metadata.timestamp}
+                  variants={fadeIn}
+                  initial="hidden"
+                  animate="show"
+                  exit="hidden"
+                  className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"
+                >
+                  <ResultSection result={result} seuil={seuil} />
+                  <ChecklistPanel checklist={result.refresh_checklist} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+      </main>
+
+      <footer className="mt-16 border-t border-surface-border/60 py-6 text-center text-xs text-ink-faint">
+        Donnees fournies par le Albion Online Data Project. Non affilie a Sandbox Interactive.
+      </footer>
+    </div>
+  )
+}
+
+interface ResultProps {
+  result: OptimizationResult
+  seuil: number
+}
+
+const ResultSection: FC<ResultProps> = ({ result, seuil }) => {
+  const { routes, discarded_top } = result
+  const hasRoutes = routes.length > 0
+
+  return (
+    <section className="space-y-6">
+      <header className="flex items-baseline gap-3">
+        <PackageSearch className="h-5 w-5 text-primary-400" />
+        <div>
+          <h2 className="text-lg font-semibold">
+            {hasRoutes
+              ? `${routes.length} route${routes.length > 1 ? 's' : ''} rentable${routes.length > 1 ? 's' : ''}`
+              : 'Aucune route rentable'}
+          </h2>
+          <p className="text-xs text-ink-muted">
+            Tier {result.run_metadata.tier} — analysees a{' '}
+            {new Date(result.run_metadata.timestamp).toLocaleTimeString('fr-FR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
           </p>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-8 space-y-6">
-        {!config && !error && (
-          <div className="flex items-center gap-2 text-sm text-ink-muted">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Chargement de la configuration…
-          </div>
-        )}
-
-        {config && (
-          <OptimizeForm config={config} loading={loading} onSubmit={handleOptimize} />
-        )}
-
-        {error && (
-          <div className="rounded-lg border border-negative/40 bg-negative/10 px-4 py-3 text-sm text-negative">
-            {error}
-          </div>
-        )}
-
-        {loading && (
-          <div className="flex items-center gap-2 text-sm text-ink-muted">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            L'optimiseur interroge l'AODP…
-          </div>
-        )}
-
-        {result && !loading && (
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold">
-              Réponse brute — {result.routes.length} route(s) rentable(s),{' '}
-              {result.discarded_top.length} alternative(s) écartée(s)
-            </h2>
-            <pre className="max-h-[70vh] overflow-auto rounded-lg border border-surface-border bg-surface-sunken p-4 text-xs num">
-              {JSON.stringify(result, null, 2)}
-            </pre>
-            <p className="text-xs text-ink-faint">
-              Session 1 : rendu brut pour valider le tuyau. Session 2 remplace ce JSON par
-              des cards structurées (RouteCard, badges de fraîcheur, warnings).
-            </p>
-          </section>
-        )}
-      </main>
-    </div>
+      {hasRoutes ? (
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          animate="show"
+          className="grid gap-4"
+        >
+          {routes.map((route) => (
+            <RouteCard key={route.rank} route={route} />
+          ))}
+        </motion.div>
+      ) : (
+        <AlternativesList alternatives={discarded_top} seuil={seuil} />
+      )}
+    </section>
   )
 }
+
+const BootLoading: FC = () => (
+  <div className="flex items-center gap-2 text-sm text-ink-muted">
+    <Loader2 className="h-4 w-4 animate-spin" />
+    Chargement de la configuration…
+  </div>
+)
 
 function describeError(err: unknown, prefix: string): string {
   if (err instanceof AxiosError) {
