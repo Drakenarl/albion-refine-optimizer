@@ -1,0 +1,14 @@
+# Configuration Railway pour le backend FastAPI.
+# Docs : https://docs.railway.com/reference/config-as-code
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Railway injecte $PORT automatiquement, notre script albion-refine-api l'utilise.
+startCommand = "albion-refine-api"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

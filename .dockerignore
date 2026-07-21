@@ -1,0 +1,28 @@
+# Repertoires lourds et inutiles au backend
+web/
+node_modules/
+tests/
+htmlcov/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Config locale (ne doit jamais atterrir dans l'image)
+.env
+.env.*
+.claude/
+.git/
+.github/
+.vscode/
+.idea/
+
+# Docs et artefacts de dev
+IDEAS.md
+CHANGELOG.md
+DEPLOYMENT.md
+*.md
+!README.md
