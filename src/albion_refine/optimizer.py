@@ -25,6 +25,7 @@ from albion_refine.models import (
     OptimizationResult,
     PriceQuote,
     QuantityMode,
+    RecupMode,
     RefreshChecklistItem,
     Route,
     RunMetadata,
@@ -34,6 +35,12 @@ from albion_refine.models import (
     VolumeData,
     WarningCode,
 )
+
+# Seuil de saturation : si la récup à vendre dépasse ce % du volume 24h de la
+# ville de destination, on lève ``RECUP_SATURATION`` (tu risques d'écraser le
+# carnet en dumpant tout d'un coup, notamment quand tu achètes et revends dans
+# la même ville).
+_SATURATION_RATIO: float = 0.50
 
 # Marge sentinelle utilisée quand le coût net est nul ou négatif (route « gratuite »).
 _MARGE_INFINIE = 1.0e9
@@ -65,7 +72,12 @@ class OptimizerParams(BaseModel):
         default_factory=lambda: list(config.DEFAULTS["excluded_sell_cities"])
     )
     ignore_recup: bool = False
-    top_n: int = 5
+    # Où la récupération RRR est vendue. ``WITH_PLANKS`` (défaut V2) est
+    # réaliste : tu transportes déjà les planks vers leur ville de vente, tu
+    # emmènes la récup avec. ``LOCAL`` reste possible pour comparaison honnête
+    # avec le comportement V1 (vente forcée à Fort Sterling).
+    recup_mode: RecupMode = RecupMode.WITH_PLANKS
+    top_n: int = 3
 
     def buy_cities(self) -> list[str]:
         """Villes autorisées à l'achat (toutes sauf les exclues)."""
@@ -144,21 +156,24 @@ def _make_leg(
 
 
 def _recuperation(
-    quote_fs: PriceQuote | None,
-    volume_fs: VolumeData | None,
+    quote: PriceQuote | None,
+    volume: VolumeData | None,
     retour: float,
     ignore: bool,
 ) -> market.RecoveryResult:
-    """Valorise les retours RRR en instant sell à Fort Sterling, carnet à l'appui.
+    """Valorise les retours RRR en instant sell dans la ville de vente choisie.
 
     L'AODP n'expose pas la profondeur des buy orders : on estime le stack
-    absorbable par le **volume échangé sur 24h** de l'item dans la ville de
-    raffinage. Sans historique exploitable, on ne crédite rien plutôt que de
+    absorbable par le **volume échangé sur 24h** de l'item dans la ville
+    ciblée. Sans historique exploitable, on ne crédite rien plutôt que de
     supposer une profondeur infinie (choix conservateur, SPEC_FIX 5.3).
 
+    En V2, la ville n'est plus figée à Fort Sterling : elle dépend de
+    ``recup_mode`` et est choisie par ``_recup_destination``.
+
     Args:
-        quote_fs: Prix de l'item à Fort Sterling.
-        volume_fs: Volume 24h de l'item à Fort Sterling (profondeur estimée).
+        quote: Prix de l'item dans la ville où la récup sera vendue.
+        volume: Volume 24h de l'item dans cette ville (profondeur estimée).
         retour: Quantité retournée par le RRR.
         ignore: Vrai pour désactiver complètement la récupération.
 
@@ -166,11 +181,18 @@ def _recuperation(
         Un ``RecoveryResult`` (valeur nette de taxe, quantité absorbée/demandée).
     """
     demande = int(retour)
-    if ignore or quote_fs is None or not quote_fs.has_buy_offer:
+    if ignore or quote is None or not quote.has_buy_offer:
         return market.RecoveryResult(valeur=0.0, absorbe=0, demande=demande)
-    profondeur = int(volume_fs.total_volume_24h) if volume_fs is not None else 0
-    book = [(float(quote_fs.buy_price_max), profondeur)]
+    profondeur = int(volume.total_volume_24h) if volume is not None else 0
+    book = [(float(quote.buy_price_max), profondeur)]
     return market.compute_recovery_value(retour, book)
+
+
+def _recup_destination(params: OptimizerParams, sell_city: str) -> str:
+    """Retourne la ville où la récupération RRR sera valorisée."""
+    if params.recup_mode is RecupMode.LOCAL:
+        return config.REFINING_CITY
+    return sell_city
 
 
 def _evaluate_sales(
@@ -239,17 +261,31 @@ def _evaluate_sales(
     )
 
 
-def _annotate_margins(scenario: SalesScenario | None, cout_net: float) -> None:
-    """Renseigne bénéfice et marge d'un scénario une fois le coût net connu.
+def _annotate_margins(
+    scenario: SalesScenario | None, cout_total: float, cout_net: float
+) -> None:
+    """Renseigne bénéfice, ROI capital et marge efficacité d'un scénario.
+
+    Deux marges sont calculées :
+    - ``marge_pct`` = ROI sur capital dépensé (bénéfice / ``cout_total``) — la
+      marge que le trader voit sur sa banque, et celle qui pilote le tri V2.
+    - ``marge_efficacite_pct`` = ancienne formule V1 (bénéfice / ``cout_net``
+      après récup) — laissée en secondaire pour comparaison honnête.
 
     Args:
         scenario: Scénario à annoter (ignoré s'il est ``None``).
-        cout_net: Coût net de la route (coût total moins récupération RRR).
+        cout_total: Coût brut dépensé (matériel + station + focus).
+        cout_net: Coût total moins récupération RRR.
     """
     if scenario is None:
         return
     scenario.benefice = scenario.expected_revenu - cout_net
-    scenario.marge_pct = scenario.benefice / cout_net * 100.0 if cout_net > 0 else _MARGE_INFINIE
+    scenario.marge_pct = (
+        scenario.benefice / cout_total * 100.0 if cout_total > 0 else _MARGE_INFINIE
+    )
+    scenario.marge_efficacite_pct = (
+        scenario.benefice / cout_net * 100.0 if cout_net > 0 else _MARGE_INFINIE
+    )
 
 
 def _collect_warnings(
@@ -312,17 +348,17 @@ def _build_route(
     cout_plank = plank_leg.cout_total if plank_leg is not None else 0.0
     cout_total = wood_leg.cout_total + cout_plank + refined.cout_station + cout_focus
 
-    fs = config.REFINING_CITY
+    recup_city = _recup_destination(params, output_quote.city)
     recup_wood = _recuperation(
-        quotes.get((wood_quote.item_id, fs)),
-        volumes.get((wood_quote.item_id, fs)),
+        quotes.get((wood_quote.item_id, recup_city)),
+        volumes.get((wood_quote.item_id, recup_city)),
         refined.wood_retour,
         params.ignore_recup,
     )
     recup_plank = (
         _recuperation(
-            quotes.get((plank_quote.item_id, fs)),
-            volumes.get((plank_quote.item_id, fs)),
+            quotes.get((plank_quote.item_id, recup_city)),
+            volumes.get((plank_quote.item_id, recup_city)),
             refined.plank_moins_1_retour,
             params.ignore_recup,
         )
@@ -335,12 +371,19 @@ def _build_route(
     scenario_a = sale.scenario_a_instant_sell
     if scenario_a is None:  # pragma: no cover - garanti par _evaluate_sales
         return None
-    _annotate_margins(scenario_a, cout_net)
-    _annotate_margins(sale.scenario_b_sell_order, cout_net)
+    _annotate_margins(scenario_a, cout_total, cout_net)
+    _annotate_margins(sale.scenario_b_sell_order, cout_total, cout_net)
 
-    # La marge « safe » (scénario A) pilote le tri et le filtrage (SPEC_FIX 3.5).
+    # La marge « safe » (scénario A) pilote le tri et le filtrage. Depuis V2,
+    # la marge principale est la ROI sur capital dépensé (pas l'ancienne
+    # formule benefice / cout_net, qui gonflait artificiellement le %).
     benefice = scenario_a.expected_revenu - cout_net
     marge_pct = scenario_a.marge_pct if scenario_a.marge_pct is not None else _MARGE_INFINIE
+    marge_efficacite_pct = (
+        scenario_a.marge_efficacite_pct
+        if scenario_a.marge_efficacite_pct is not None
+        else _MARGE_INFINIE
+    )
     scenario_b = sale.scenario_b_sell_order
     silver_par_focus = (
         benefice / refined.focus_utilise if params.focus and refined.focus_utilise > 0 else None
@@ -359,6 +402,8 @@ def _build_route(
     warnings = _collect_warnings(cities, legs_fresh, volume, quantity)
     if recup_wood.partielle or recup_plank.partielle:
         warnings.append(WarningCode.RECUP_PARTIELLE)
+    if _recup_saturates(recup_wood, recup_plank, wood_quote, plank_quote, recup_city, volumes):
+        warnings.append(WarningCode.RECUP_SATURATION)
 
     return Route(
         tier=tier,
@@ -374,16 +419,50 @@ def _build_route(
         recup_plank_absorbe=recup_plank.absorbe,
         recup_plank_demande=recup_plank.demande,
         recup_totale=recup_totale,
+        recup_city=recup_city,
         cout_total=cout_total,
         cout_net=cout_net,
         revenu_effectif=scenario_a.expected_revenu,
         benefice=benefice,
         marge_pct=marge_pct,
+        marge_efficacite_pct=marge_efficacite_pct,
         benefice_b=scenario_b.benefice if scenario_b is not None else None,
         marge_pct_b=scenario_b.marge_pct if scenario_b is not None else None,
+        marge_efficacite_pct_b=(
+            scenario_b.marge_efficacite_pct if scenario_b is not None else None
+        ),
         silver_par_focus=silver_par_focus,
         warnings=warnings,
     )
+
+
+def _recup_saturates(
+    recup_wood: market.RecoveryResult,
+    recup_plank: market.RecoveryResult,
+    wood_quote: PriceQuote,
+    plank_quote: PriceQuote | None,
+    recup_city: str,
+    volumes: VolumeIndex,
+) -> bool:
+    """Vrai si la récup à écouler dépasse ``_SATURATION_RATIO`` du volume 24h.
+
+    Levé quand tu comptes revendre un stack important dans la ville où tu
+    viens d'acheter : tu risques d'écraser le carnet (buy_max qui s'effondre à
+    mesure que tu remplis les ordres). Le walk_book gère la profondeur exacte
+    quand elle est connue ; ce warning est un garde-fou qualitatif en amont.
+    """
+
+    def _saturates(res: market.RecoveryResult, item_id: str) -> bool:
+        if res.demande <= 0:
+            return False
+        vol = volumes.get((item_id, recup_city))
+        if vol is None or vol.total_volume_24h <= 0:
+            return False
+        return res.demande > _SATURATION_RATIO * vol.total_volume_24h
+
+    if _saturates(recup_wood, wood_quote.item_id):
+        return True
+    return plank_quote is not None and _saturates(recup_plank, plank_quote.item_id)
 
 
 def _sort_key(params: OptimizerParams) -> Callable[[Route], tuple[float, float]]:
@@ -434,27 +513,35 @@ def _build_checklist(
     return checklist
 
 
-def _discarded_report(best_below: Route | None, params: OptimizerParams) -> DiscardedRoute | None:
-    """Construit le rapport du meilleur candidat écarté par le seuil de marge."""
-    if best_below is None:
-        return None
+def _discarded_report(route: Route, params: OptimizerParams) -> DiscardedRoute:
+    """Convertit une route écartée en rapport lisible avec suggestions."""
+    plank_src = f" + plank T-1 @ {route.achat_plank.city}" if route.achat_plank else ""
     description = (
-        f"Achat {best_below.achat_wood.city} → {config.REFINING_CITY} "
-        f"→ Vente {best_below.vente.ville}"
+        f"Bois T{route.tier} @ {route.achat_wood.city}{plank_src} "
+        f"→ raffinage {config.REFINING_CITY} → vente @ {route.vente.ville}"
     )
     return DiscardedRoute(
         description=description,
-        marge_pct=round(best_below.marge_pct, 1),
-        marge_pct_b=(
-            round(best_below.marge_pct_b, 1) if best_below.marge_pct_b is not None else None
+        marge_pct=round(route.marge_pct, 1),
+        marge_pct_b=(round(route.marge_pct_b, 1) if route.marge_pct_b is not None else None),
+        marge_efficacite_pct=round(route.marge_efficacite_pct, 1),
+        raison=(
+            f"ROI capital {route.marge_pct:.1f}% < seuil {params.seuil_marge_min_pct:.0f}%"
         ),
-        raison=f"marge {best_below.marge_pct:.1f}% < seuil {params.seuil_marge_min_pct:.0f}%",
         suggestions=[
-            f"Baisser --seuil-marge à {math.floor(best_below.marge_pct)} pour voir cette route",
+            f"Baisser --seuil-marge à {math.floor(route.marge_pct)} pour voir cette route",
             "Attendre un rafraîchissement des prix (données trop vieilles)",
             "Essayer un autre tier",
         ],
     )
+
+
+def _discarded_top(
+    candidates: list[Route], params: OptimizerParams, n: int
+) -> list[DiscardedRoute]:
+    """Retourne les ``n`` meilleurs candidats écartés, triés par ROI décroissante."""
+    ordered = sorted(candidates, key=lambda r: r.marge_pct, reverse=True)
+    return [_discarded_report(route, params) for route in ordered[:n]]
 
 
 def _plank_input_item(tier: int) -> str | None:
@@ -553,10 +640,11 @@ def optimize(
     for rank, route in enumerate(top, start=1):
         route.rank = rank
 
-    discarded = None
+    discarded_best: DiscardedRoute | None = None
+    discarded_top: list[DiscardedRoute] = []
     if not top and candidates:
-        best_below = max(candidates, key=lambda r: r.marge_pct)
-        discarded = _discarded_report(best_below, params)
+        discarded_top = _discarded_top(candidates, params, params.top_n)
+        discarded_best = discarded_top[0] if discarded_top else None
 
     return OptimizationResult(
         run_metadata=RunMetadata(
@@ -567,7 +655,8 @@ def optimize(
         ),
         routes=top,
         refresh_checklist=_build_checklist(top, quotes, now, params),
-        discarded_best=discarded,
+        discarded_best=discarded_best,
+        discarded_top=discarded_top,
     )
 
 

@@ -84,10 +84,11 @@ class TestDoubleScenario:
     def test_route_title_uses_scenario_a_margin(self) -> None:
         result = _sample_result()
         route = result.routes[0]
-        console = Console(record=True, width=120)
+        console = Console(record=True, width=160)
         formatters.render_report(result, console)
         text = console.export_text()
-        assert f"Marge nette (safe) : {route.marge_pct:.1f}%" in text
+        signe = "+" if route.marge_pct >= 0 else ""
+        assert f"ROI {signe}{route.marge_pct:.1f}%" in text
 
 
 class TestRenderReport:

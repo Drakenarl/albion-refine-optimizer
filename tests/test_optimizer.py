@@ -10,6 +10,7 @@ from albion_refine import optimizer
 from albion_refine.models import (
     PriceQuote,
     QuantityMode,
+    RecupMode,
     SellStrategy,
     VolumeData,
     WarningCode,
@@ -180,7 +181,7 @@ class TestFreshnessWeighting:
 
 
 class TestRecuperationWalk:
-    """La récup RRR passe par le carnet d'achat de Fort Sterling (SPEC_FIX 5)."""
+    """La récup RRR passe par le carnet d'achat de Fort Sterling (recup_mode=local)."""
 
     def _run(self, volume_fs: float | None) -> optimizer.OptimizationResult:
         now = datetime(2026, 7, 19, 15, 20, 0)
@@ -204,6 +205,7 @@ class TestRecuperationWalk:
             quantite=100,
             station_rate=100,
             seuil_marge_min_pct=-1000,
+            recup_mode=RecupMode.LOCAL,
         )
         return optimize(params, quotes, volumes, now)
 
@@ -231,6 +233,91 @@ class TestRecuperationWalk:
         pauvre = self._run(volume_fs=None).routes[0]
         assert riche.cout_net < pauvre.cout_net
         assert riche.marge_pct > pauvre.marge_pct
+
+
+class TestRecupModeWithPlanks:
+    """En mode ``with-planks``, la récup est vendue dans la ville des planks.
+
+    Sur ce fixture, FS n'a pas de carnet acheteur (buy_max=1) sur le bois qu'il
+    a lui-même produit — c'est le cas typique observé en jeu qui rendait la V1
+    faussement déficitaire. Lymhurst, en revanche, achète bois et planks à un
+    prix réel. Le passage au mode ``with-planks`` doit donc faire remonter la
+    récup et améliorer la marge.
+    """
+
+    def _run(self, recup_mode: RecupMode) -> optimizer.OptimizationResult:
+        now = datetime(2026, 7, 19, 15, 20, 0)
+        when = datetime(2026, 7, 19, 15, 0, 0)
+        quotes = [
+            _quote("T4_WOOD", "Martlock", sell=100, when=when),
+            _quote("T3_PLANKS", "Martlock", sell=200, when=when),
+            # FS : carnet acheteur quasi vide (le cas problématique).
+            _quote("T4_WOOD", "Fort Sterling", sell=120, buy=1, when=when),
+            _quote("T3_PLANKS", "Fort Sterling", sell=220, buy=1, when=when),
+            # Lymhurst : carnet acheteur profond sur bois, planks et output.
+            _quote("T4_WOOD", "Lymhurst", sell=140, buy=95, when=when),
+            _quote("T3_PLANKS", "Lymhurst", sell=250, buy=180, when=when),
+            _quote("T4_PLANKS", "Lymhurst", sell=600, buy=500, when=when),
+        ]
+        volumes = [
+            VolumeData(item_id="T4_PLANKS", city="Lymhurst", total_volume_24h=1000),
+            VolumeData(item_id="T4_WOOD", city="Fort Sterling", total_volume_24h=10_000),
+            VolumeData(item_id="T3_PLANKS", city="Fort Sterling", total_volume_24h=10_000),
+            VolumeData(item_id="T4_WOOD", city="Lymhurst", total_volume_24h=10_000),
+            VolumeData(item_id="T3_PLANKS", city="Lymhurst", total_volume_24h=10_000),
+        ]
+        params = OptimizerParams(
+            tier=4,
+            mode=QuantityMode.FIXED,
+            quantite=100,
+            station_rate=100,
+            seuil_marge_min_pct=-1000,
+            recup_mode=recup_mode,
+        )
+        return optimize(params, quotes, volumes, now)
+
+    def test_with_planks_beats_local_when_fs_book_is_empty(self) -> None:
+        local = self._run(RecupMode.LOCAL).routes[0]
+        with_planks = self._run(RecupMode.WITH_PLANKS).routes[0]
+        assert with_planks.recup_totale > local.recup_totale
+        assert with_planks.marge_pct > local.marge_pct
+        assert with_planks.recup_city == "Lymhurst"
+        assert local.recup_city == "Fort Sterling"
+
+
+class TestRecupSaturationWarning:
+    """Le warning ``RECUP_SATURATION`` protège contre l'écrasement de carnet."""
+
+    def _run(self, volume_lym: float) -> optimizer.OptimizationResult:
+        now = datetime(2026, 7, 19, 15, 20, 0)
+        when = datetime(2026, 7, 19, 15, 0, 0)
+        quotes = [
+            _quote("T4_WOOD", "Lymhurst", sell=140, buy=95, when=when),
+            _quote("T3_PLANKS", "Lymhurst", sell=250, buy=180, when=when),
+            _quote("T4_PLANKS", "Lymhurst", sell=600, buy=500, when=when),
+        ]
+        volumes = [
+            VolumeData(item_id="T4_PLANKS", city="Lymhurst", total_volume_24h=1000),
+            VolumeData(item_id="T4_WOOD", city="Lymhurst", total_volume_24h=volume_lym),
+            VolumeData(item_id="T3_PLANKS", city="Lymhurst", total_volume_24h=volume_lym),
+        ]
+        params = OptimizerParams(
+            tier=4,
+            mode=QuantityMode.FIXED,
+            quantite=1000,
+            station_rate=100,
+            seuil_marge_min_pct=-1000,
+            recup_mode=RecupMode.WITH_PLANKS,
+        )
+        return optimize(params, quotes, volumes, now)
+
+    def test_saturation_flagged_when_recup_exceeds_half_volume(self) -> None:
+        route = self._run(volume_lym=100).routes[0]
+        assert WarningCode.RECUP_SATURATION in route.warnings
+
+    def test_no_saturation_when_volume_is_deep(self) -> None:
+        route = self._run(volume_lym=100_000).routes[0]
+        assert WarningCode.RECUP_SATURATION not in route.warnings
 
 
 class TestFixtureIntegration:

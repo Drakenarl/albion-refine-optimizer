@@ -230,7 +230,11 @@ HTTP_MAX_RETRIES: Final = 3
 # ---------------------------------------------------------------------------
 
 DEFAULTS: Final[dict[str, Any]] = {
-    "seuil_marge_min_pct": 30,
+    # Depuis V2, le seuil s'applique à la ROI capital (bénéfice / dépense
+    # brute), pas à l'ancienne marge d'efficacité (bénéfice / coût net après
+    # récup). Le défaut à 0 laisse remonter toute route rentable ; l'utilisateur
+    # serre la vis avec ``--seuil-marge N`` s'il veut filtrer plus haut.
+    "seuil_marge_min_pct": 0,
     "seuil_fill_probability_pct": 20,
     "freshness_warning_hours": 3,  # jaune
     "freshness_critical_hours": 6,  # rouge, exclu par défaut

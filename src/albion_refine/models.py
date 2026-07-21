@@ -37,6 +37,13 @@ class SellStrategy(StrEnum):
     SELL_ORDER = "sell_order"
 
 
+class SourcingMode(StrEnum):
+    """Origine d'un input : acheté au marché ou produit soi-même (cascade V2)."""
+
+    MARKET = "market"
+    PRODUCTION = "production"
+
+
 class FreshnessLevel(StrEnum):
     """Niveau de fraîcheur d'un prix AODP."""
 
@@ -53,6 +60,24 @@ class WarningCode(StrEnum):
     PROFONDEUR_INCERTAINE = "PROFONDEUR_INCERTAINE"
     DATA_JAUNE = "DATA_JAUNE"
     RECUP_PARTIELLE = "RECUP_PARTIELLE"
+    RECUP_SATURATION = "RECUP_SATURATION"
+
+
+class RecupMode(StrEnum):
+    """Où la récupération RRR est vendue.
+
+    ``LOCAL`` : vente à Fort Sterling (ville de raffinage). Sûr, aucun
+    transport, mais souvent défavorable quand FS n'a pas de carnet acheteur sur
+    le bois qu'il a lui-même produit.
+
+    ``WITH_PLANKS`` : vente dans la même ville que les planks. C'est le
+    workflow réel du raffineur non-premium (un seul déplacement) et le nouveau
+    défaut : la V1 sous-valorisait systématiquement la récup en la
+    contraignant à FS.
+    """
+
+    LOCAL = "local"
+    WITH_PLANKS = "with-planks"
 
 
 # Date sentinelle renvoyée par l'AODP quand aucune donnée n'existe.
@@ -162,7 +187,14 @@ class SalesScenario(BaseModel):
     # Certitude qualitative : « haute » en instant sell (revenu immédiat),
     # « moyenne » en sell order (conditionnel au remplissage de l'ordre).
     certitude: str = "haute"
+    # ``marge_pct`` = ROI sur le capital dépensé (bénéfice / coût total dépensé).
+    # C'est la marge que le trader voit sur sa banque : si elle vaut 20%, mettre
+    # 1 M ressort 1.2 M. Elle pilote le tri et le seuil (V2, voir CHANGELOG).
     marge_pct: float | None = None
+    # ``marge_efficacite_pct`` = ancienne formule V1 (bénéfice / coût net après
+    # récup). Toujours affichée en secondaire pour ne pas perdre l'information
+    # « efficacité du silver réellement immobilisé ».
+    marge_efficacite_pct: float | None = None
     benefice: float | None = None
     # Scénario B uniquement : écart d'espérance de revenu face au scénario A.
     gain_marginal_vs_a: float | None = None
@@ -184,7 +216,15 @@ class VenteBlock(BaseModel):
 
 
 class SourcingLeg(BaseModel):
-    """Coût d'approvisionnement d'un input (bois ou plank T-1) dans une ville."""
+    """Coût d'approvisionnement d'un input (bois ou plank T-1) dans une ville.
+
+    Un input peut être acheté au marché (``source = market``, seul cas géré en
+    V1) ou produit soi-même en descendant d'un tier (``source = production``,
+    cascade V2). Dans le cas ``production``, ``prix_unitaire`` reste le coût
+    unitaire *effectif* de l'input — récupération RRR de la sous-étape déjà
+    déduite — pour que tous les calculs amont restent identiques, et
+    ``production`` porte le détail de la sous-route.
+    """
 
     kind: str  # "wood" ou "plank"
     item_id: str
@@ -195,6 +235,33 @@ class SourcingLeg(BaseModel):
     cout_total: float
     data_age_hours: float | None = None
     freshness: FreshnessLevel = FreshnessLevel.UNKNOWN
+    source: SourcingMode = SourcingMode.MARKET
+    production: ProductionLeg | None = None
+
+
+class ProductionLeg(BaseModel):
+    """Sous-route « je produis cet input au lieu de l'acheter » (cascade V2).
+
+    Structure volontairement plus légère qu'une ``Route`` : une sous-étape n'a
+    pas de bloc de vente (l'output est consommé par l'étape parente) ni de
+    classement. Elle est récursive : son propre ``achat_plank`` peut à son tour
+    être une ``ProductionLeg``.
+    """
+
+    tier: int
+    # Ville où le raffinage de cette sous-étape a lieu (Fort Sterling pour le
+    # bois, mais le modèle n'impose rien : une V2+ peut arbitrer par ville).
+    city: str
+    achat_wood: SourcingLeg
+    achat_plank: SourcingLeg | None = None
+    raffinage: RefiningResult
+    # Récupération RRR de la sous-étape, valorisée puis déduite du coût net.
+    recup_totale: float = 0.0
+    cout_total: float = 0.0
+    cout_net: float = 0.0
+
+
+SourcingLeg.model_rebuild()
 
 
 class Route(BaseModel):
@@ -217,16 +284,24 @@ class Route(BaseModel):
     recup_plank_absorbe: int = 0
     recup_plank_demande: int = 0
     recup_totale: float
+    # Ville où la récupération RRR a été valorisée (dépend de ``recup_mode``).
+    recup_city: str = ""
     cout_total: float
     cout_net: float
     # Toutes les valeurs « safe » ci-dessous proviennent du scénario A
     # (instant sell) : c'est sur elles que portent le tri et le seuil de marge.
     revenu_effectif: float
     benefice: float
+    # ``marge_pct`` = ROI sur le capital dépensé. Depuis V2, c'est cette marge
+    # qui pilote le tri, le seuil ``--seuil-marge`` et le titre de la route.
     marge_pct: float
+    # ``marge_efficacite_pct`` = ancienne formule V1 (bénéfice / coût net après
+    # récup). Toujours calculée pour compatibilité et affichage secondaire.
+    marge_efficacite_pct: float
     # Potentiel du scénario B (sell order), pondéré par la fill probability.
     benefice_b: float | None = None
     marge_pct_b: float | None = None
+    marge_efficacite_pct_b: float | None = None
     silver_par_focus: float | None = None
     warnings: list[WarningCode] = Field(default_factory=list)
 
@@ -246,9 +321,12 @@ class DiscardedRoute(BaseModel):
     """Meilleur candidat écarté, affiché quand aucune route ne passe le seuil."""
 
     description: str
+    # ROI capital du scénario A (nouvelle marge principale V2).
     marge_pct: float | None
-    # Marge du scénario B, pour aider l'utilisateur à arbitrer son seuil.
+    # ROI capital du scénario B, pour aider l'utilisateur à arbitrer son seuil.
     marge_pct_b: float | None = None
+    # Ancienne formule V1, laissée en secondaire pour comparaison.
+    marge_efficacite_pct: float | None = None
     raison: str
     suggestions: list[str] = Field(default_factory=list)
 
@@ -263,9 +341,13 @@ class RunMetadata(BaseModel):
 
 
 class OptimizationResult(BaseModel):
-    """Résultat complet d'un run : routes triées + check-list + candidat écarté."""
+    """Résultat complet d'un run : routes triées + check-list + candidats écartés."""
 
     run_metadata: RunMetadata
     routes: list[Route] = Field(default_factory=list)
     refresh_checklist: list[RefreshChecklistItem] = Field(default_factory=list)
+    # Meilleur candidat écarté (rétrocompat V1/V2.0). Depuis V2.1, ``discarded_top``
+    # expose jusqu'à N alternatives ordonnées, utiles pour comprendre à quel point
+    # le marché est loin de la rentabilité et arbitrer manuellement.
     discarded_best: DiscardedRoute | None = None
+    discarded_top: list[DiscardedRoute] = Field(default_factory=list)

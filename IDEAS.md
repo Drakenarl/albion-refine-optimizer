@@ -36,6 +36,9 @@ Notes prises pendant l'implémentation de la V1. **Rien de ceci n'est implément
   - Prix moyen 24h stable ~12 060 s
   - La marge "sell order" affichée par V1 (150.5%) est conditionnelle,
     la marge "instant sell" réelle est ~137%. V2 doit afficher les deux.
+- **Mode focus doit accepter un cap silver** : actuellement `--mode focus --focus-available X`
+  calcule la quantité max théorique sans borner par le capital disponible. Résultat :
+  chiffres à 100M+ inutilisables en pratique. Ajouter `--capital-cap Y` optionnel.
 
 ## V3
 

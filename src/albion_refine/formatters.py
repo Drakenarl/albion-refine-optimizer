@@ -88,10 +88,15 @@ def classify_age(age_hours_value: float | None) -> FreshnessLevel:
 
 
 def _marge_color(marge_pct: float) -> str:
-    """Retourne la couleur associée à une marge safe (SPEC_FIX section 7.2)."""
-    if marge_pct > 50:
+    """Retourne la couleur associée à une ROI capital safe.
+
+    Recalibré pour la V2 : les seuils s'appliquent désormais à la ROI capital
+    (bénéfice / coût total), pas à l'ancienne marge d'efficacité qui gonflait
+    artificiellement les %. Un vert < 30% ROI est déjà excellent en Albion.
+    """
+    if marge_pct > 30:
         return "green"
-    if marge_pct >= 20:
+    if marge_pct >= 15:
         return "yellow"
     return "red"
 
@@ -118,7 +123,13 @@ def _append_scenario_a(body: Text, scenario: SalesScenario | None) -> None:
     body.append(_confiance_line(scenario))
     body.append(f"      revenu pondéré   : {fmt_silver(scenario.revenu_net_pondere)}\n")
     if scenario.marge_pct is not None:
-        body.append(f"      marge pondérée   : {scenario.marge_pct:.1f}%\n")
+        body.append(f"      ROI capital      : {scenario.marge_pct:.1f}%\n")
+    if scenario.marge_efficacite_pct is not None:
+        body.append(
+            f"      marge efficacité : {scenario.marge_efficacite_pct:.1f}% "
+            "(après récup, indicateur secondaire)\n",
+            style="dim",
+        )
 
 
 def _append_scenario_b(body: Text, scenario: SalesScenario | None) -> None:
@@ -144,7 +155,15 @@ def _append_scenario_b(body: Text, scenario: SalesScenario | None) -> None:
         style=style,
     )
     if scenario.marge_pct is not None:
-        body.append(f"      marge espérée    : {scenario.marge_pct:.1f}%\n", style=style)
+        body.append(
+            f"      ROI capital esp. : {scenario.marge_pct:.1f}%\n", style=style
+        )
+    if scenario.marge_efficacite_pct is not None:
+        body.append(
+            f"      marge efficacité : {scenario.marge_efficacite_pct:.1f}% "
+            "(secondaire)\n",
+            style="dim",
+        )
     if scenario.gain_marginal_vs_a is not None:
         signe = "+" if scenario.gain_marginal_vs_a >= 0 else ""
         detail = ""
@@ -208,12 +227,13 @@ def _route_panel(route: Route) -> Panel:
     # Synthèse.
     body.append("\n")
     if route.recup_totale > 0 or route.recup_wood_demande > 0:
+        ville = route.recup_city or config.REFINING_CITY
         detail = (
             f"{route.recup_wood_absorbe}/{route.recup_wood_demande} bois absorbés, "
             f"{route.recup_plank_absorbe}/{route.recup_plank_demande} planks T-1 absorbés"
         )
         body.append(
-            f"RÉCUP (retours)  : {fmt_silver(route.recup_totale)} ({detail})\n",
+            f"RÉCUP @ {ville:<11}: {fmt_silver(route.recup_totale)} ({detail})\n",
             style="green",
         )
     if WarningCode.RECUP_PARTIELLE in route.warnings:
@@ -224,10 +244,30 @@ def _route_panel(route: Route) -> Panel:
             "inventaire, non valorisés (carnet d'achat insuffisant)\n",
             style="yellow",
         )
-    body.append(f"COÛT NET (safe)  : {fmt_silver(route.cout_net)}\n")
+    if WarningCode.RECUP_SATURATION in route.warnings:
+        body.append(
+            "        ⚠ récup > 50% du volume 24h de la ville : "
+            "risque d'écraser le carnet en dumpant tout d'un coup\n",
+            style="yellow",
+        )
+    body.append(f"CAPITAL DÉPENSÉ  : {fmt_silver(route.cout_total)}\n")
+    body.append(
+        f"COÛT NET (après récup) : {fmt_silver(route.cout_net)}\n",
+        style="dim",
+    )
     benefice_style = "bold green" if route.benefice >= 0 else "bold red"
     sign = "+" if route.benefice >= 0 else ""
     body.append(f"BÉNÉFICE SAFE    : {sign}{fmt_silver(route.benefice)}\n", style=benefice_style)
+    body.append(
+        f"ROI CAPITAL      : {sign}{route.marge_pct:.1f}% "
+        "(bénéfice / capital dépensé, la vraie ROI trader)\n",
+        style=benefice_style,
+    )
+    body.append(
+        f"marge efficacité : {route.marge_efficacite_pct:.1f}% "
+        "(ancien indicateur V1, bénéfice / coût net)\n",
+        style="dim",
+    )
     if route.benefice_b is not None:
         signe_b = "+" if route.benefice_b >= 0 else ""
         body.append(
@@ -241,9 +281,13 @@ def _route_panel(route: Route) -> Panel:
         style="bold",
     )
 
-    title = f"TOP {route.rank} — Marge nette (safe) : {route.marge_pct:.1f}%"
+    signe = "+" if route.benefice >= 0 else ""
+    title = (
+        f"TOP {route.rank} — Capital {fmt_silver(route.cout_total)} → "
+        f"Bénéfice {signe}{fmt_silver(route.benefice)} (ROI {signe}{route.marge_pct:.1f}%)"
+    )
     if route.marge_pct_b is not None:
-        title += f" — potentiel jusqu'à {route.marge_pct_b:.1f}%"
+        title += f" | potentiel SO {route.marge_pct_b:+.1f}%"
     subtitle = f"TIER {route.tier} PLANKS — {route.quantite} unités"
     return Panel(body, title=title, subtitle=subtitle, border_style=_marge_color(route.marge_pct))
 
@@ -280,22 +324,49 @@ def render_report(result: OptimizationResult, console: Console | None = None) ->
 
 
 def _render_no_routes(result: OptimizationResult, console: Console) -> None:
-    """Affiche le rapport du meilleur candidat écarté quand aucune route ne passe."""
+    """Affiche les alternatives écartées quand aucune route ne passe le seuil.
+
+    Depuis V2.1, on liste jusqu'à ``top_n`` candidats (via ``discarded_top``)
+    au lieu du seul « meilleur » : l'utilisateur voit l'éventail réel du
+    marché et peut arbitrer manuellement (baisser le seuil, changer de tier).
+    """
     seuil = result.run_metadata.params.get("seuil_marge_min_pct", "?")
-    console.print(f"Aucune route ne passe le seuil de {seuil}%.", style="bold yellow")
-    discarded = result.discarded_best
-    if discarded is None:
-        console.print("Aucun candidat exploitable trouvé (données absentes ou trop vieilles).")
+    alternatives = result.discarded_top or (
+        [result.discarded_best] if result.discarded_best is not None else []
+    )
+    if not alternatives:
+        console.print(
+            "Aucun candidat exploitable trouvé (données absentes ou trop vieilles).",
+            style="bold yellow",
+        )
         return
-    console.print("Meilleure route trouvée :", style="bold")
-    console.print(f"  {discarded.description}")
-    if discarded.marge_pct is not None:
-        console.print(f"  Marge scénario A (instant sell) : {discarded.marge_pct:.1f}%")
-    if discarded.marge_pct_b is not None:
-        console.print(f"  Marge scénario B (sell order)   : {discarded.marge_pct_b:.1f}%")
-    console.print(f"  Écartée car : {discarded.raison}")
+
+    console.print(
+        f"Aucune route ne passe le seuil de {seuil}% de ROI capital. "
+        f"Voici les {len(alternatives)} meilleures alternatives :",
+        style="bold yellow",
+    )
+    console.print()
+    for rank, discarded in enumerate(alternatives, start=1):
+        console.print(f"[{rank}] {discarded.description}", style="bold")
+        if discarded.marge_pct is not None:
+            console.print(
+                f"    ROI capital (instant sell) : {discarded.marge_pct:.1f}%"
+            )
+        if discarded.marge_pct_b is not None:
+            console.print(
+                f"    ROI capital (sell order)   : {discarded.marge_pct_b:.1f}%"
+            )
+        if discarded.marge_efficacite_pct is not None:
+            console.print(
+                f"    Marge efficacité (secondaire, V1) : "
+                f"{discarded.marge_efficacite_pct:.1f}%",
+                style="dim",
+            )
+        console.print()
+
     console.print("Suggestions :", style="bold")
-    for suggestion in discarded.suggestions:
+    for suggestion in alternatives[0].suggestions:
         console.print(f"  - {suggestion}")
 
 

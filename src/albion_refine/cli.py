@@ -16,7 +16,7 @@ from rich.console import Console
 
 from albion_refine import config, formatters
 from albion_refine.aodp_client import AodpClient, AodpError
-from albion_refine.models import QuantityMode
+from albion_refine.models import QuantityMode, RecupMode
 from albion_refine.optimizer import OptimizerParams, run_optimization
 
 
@@ -83,6 +83,7 @@ def _build_params(
     seuil_marge: float,
     exclude_vente: list[str],
     exclude_achat: list[str],
+    recup_mode: RecupMode,
 ) -> OptimizerParams:
     """Assemble et valide les paramètres d'optimisation selon le mode choisi."""
     if mode is QuantityMode.CAPITAL and not capital:
@@ -108,6 +109,7 @@ def _build_params(
         seuil_marge_min_pct=seuil_marge,
         excluded_buy_cities=list(config.DEFAULTS["excluded_buy_cities"]) + exclude_achat,
         excluded_sell_cities=list(config.DEFAULTS["excluded_sell_cities"]) + exclude_vente,
+        recup_mode=recup_mode,
     )
 
 
@@ -141,8 +143,26 @@ def optimize(
         float, typer.Option("--cost-per-focus", help="Coût silver d'un point de focus.")
     ] = 0.0,
     seuil_marge: Annotated[
-        float, typer.Option("--seuil-marge", help="Marge minimale en % (défaut 30).")
+        float,
+        typer.Option(
+            "--seuil-marge",
+            help=(
+                "ROI minimale sur capital dépensé en % (défaut 20). "
+                "Ex. 20 = tu veux au moins +20% sur ton silver investi."
+            ),
+        ),
     ] = float(config.DEFAULTS["seuil_marge_min_pct"]),
+    recup_mode: Annotated[
+        RecupMode,
+        typer.Option(
+            "--recup-mode",
+            help=(
+                "Où vendre la récup RRR. "
+                "'with-planks' (défaut) : dans la ville des planks (workflow réaliste). "
+                "'local' : à Fort Sterling (comportement V1, souvent défavorable)."
+            ),
+        ),
+    ] = RecupMode.WITH_PLANKS,
     exclude_vente: Annotated[
         list[str] | None, typer.Option("--exclude-vente", help="Ville à exclure de la vente.")
     ] = None,
@@ -173,6 +193,7 @@ def optimize(
         seuil_marge=seuil_marge,
         exclude_vente=exclude_vente or [],
         exclude_achat=exclude_achat or [],
+        recup_mode=recup_mode,
     )
 
     try:
