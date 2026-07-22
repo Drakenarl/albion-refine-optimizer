@@ -84,11 +84,24 @@ class TestNutrition:
 
 
 class TestTaxes:
-    def test_rates(self) -> None:
-        assert config.TAX_INSTANT_SELL == 0.08
-        assert config.TAX_SELL_ORDER_SETUP == 0.05
-        assert config.TAX_SELL_ORDER_SALE == 0.08
-        assert config.TAX_SELL_ORDER_TOTAL == 0.13
+    def test_rates_non_premium(self) -> None:
+        # V3.0 : setup fee corrige a 2.5% (etait 5% dans un ancien patch).
+        import pytest
+
+        assert config.TAX_INSTANT_SELL == pytest.approx(0.08)
+        assert config.TAX_SELL_ORDER_SETUP == pytest.approx(0.025)
+        assert config.TAX_SELL_ORDER_SALE == pytest.approx(0.08)
+        assert config.TAX_SELL_ORDER_TOTAL == pytest.approx(0.105)
+
+    def test_rates_premium(self) -> None:
+        # V3.0 : ajout du support premium.
+        import pytest
+
+        assert config.instant_sell_tax(premium=True) == pytest.approx(0.04)
+        assert config.instant_sell_tax(premium=False) == pytest.approx(0.08)
+        # Sell order = 2.5% setup + sale variable
+        assert config.sell_order_total_tax(premium=True) == pytest.approx(0.065)
+        assert config.sell_order_total_tax(premium=False) == pytest.approx(0.105)
 
 
 class TestEndpoints:

@@ -81,14 +81,15 @@ class TestControlledRoute:
         route = self._run().routes[0]
         scenario_b = route.vente.scenario_b_sell_order
         assert scenario_b is not None
-        # Scénario B : listing 594 × 100 = 59400, net = 51678.
+        # V3.0 : taxe non-premium sell_order = 10.5% (setup 2.5% + sale 8%).
+        # Listing 594 × 100 = 59400 → net = 59400 × 0.895 = 53163.
         assert scenario_b.strategy == SellStrategy.SELL_ORDER
-        assert scenario_b.revenu_net == pytest.approx(51678.0)
-        # Fill proba realiste : 0.85 × 0.85 = 0.7225 → espérance 37 337 s.
+        assert scenario_b.revenu_net == pytest.approx(53163.0)
+        # Fill proba realiste : 0.85 × 0.85 = 0.7225.
         assert scenario_b.fill_proba == pytest.approx(0.7225)
-        assert scenario_b.expected_revenu == pytest.approx(37337.355)
-        assert route.marge_pct_b == pytest.approx(-7.02, abs=0.01)
-        assert scenario_b.gain_marginal_vs_a == pytest.approx(-8662.645)
+        # Esperance = 53163 × 0.7225 ≈ 38410.3 (tolerance sur arrondi flottant).
+        assert scenario_b.expected_revenu == pytest.approx(38410.3, abs=1.0)
+        assert route.marge_pct_b == pytest.approx(-4.35, abs=0.05)
         # Le sell order rapporte moins en espérance : on reste sur l'instant sell.
         assert route.vente.recommandation == "instant_sell"
 

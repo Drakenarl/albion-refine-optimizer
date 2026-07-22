@@ -189,8 +189,16 @@ class TestTaxes:
         assert market.apply_instant_sell_tax(100000.0) == pytest.approx(92000.0)
 
     def test_sell_order_tax(self) -> None:
-        # 13% total
-        assert market.apply_sell_order_tax(100000.0) == pytest.approx(87000.0)
+        # V3.0 : 10.5% total non-premium (2.5% setup + 8% sale).
+        assert market.apply_sell_order_tax(100000.0) == pytest.approx(89500.0)
+
+    def test_instant_sell_tax_premium(self) -> None:
+        # V3.0 : 4% premium au lieu de 8%.
+        assert market.apply_instant_sell_tax(100000.0, premium=True) == pytest.approx(96000.0)
+
+    def test_sell_order_tax_premium(self) -> None:
+        # V3.0 : 6.5% premium (2.5% setup + 4% sale).
+        assert market.apply_sell_order_tax(100000.0, premium=True) == pytest.approx(93500.0)
 
     def test_sell_order_tax_uses_config_total(self) -> None:
         expected = 100000.0 * (1 - config.TAX_SELL_ORDER_TOTAL)
@@ -311,7 +319,8 @@ class TestSellOrder:
         assert scenario.strategy == SellStrategy.SELL_ORDER
         assert scenario.prix_unitaire_ref == pytest.approx(prix_listing)
         assert scenario.revenu_brut == pytest.approx(prix_listing * 100)
-        assert scenario.revenu_net == pytest.approx(prix_listing * 100 * 0.87)
+        # V3.0 : taxe sell_order non-premium = 10.5% (etait 13% avant setup fee fix).
+        assert scenario.revenu_net == pytest.approx(prix_listing * 100 * 0.895)
         # volume 200 / 100 unités, top du carnet, undercut 1% : 0.85 × 0.85 × 1.0
         assert scenario.fill_proba == pytest.approx(0.7225)
         # Sans âge connu, la confiance fraîcheur tombe à 0.50.

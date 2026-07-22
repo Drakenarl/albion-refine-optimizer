@@ -296,13 +296,32 @@ def nutrition_per_unit(tier: int) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Taxes de marché (joueur sans premium — voir SPEC section 6.5)
+# Taxes de marché (V3.0 : ajout du differentiel premium/non-premium)
 # ---------------------------------------------------------------------------
+# Valeurs actuelles verifiees sur wiki.albiononline.com/wiki/Marketplace et
+# forums en 2026 : le setup fee est 2.5% (etait 5% avant un patch qu'on avait
+# pas capte dans la V1). La sale tax est 8% non-premium, 4% premium.
 
-TAX_INSTANT_SELL: Final = 0.08
-TAX_SELL_ORDER_SETUP: Final = 0.05
-TAX_SELL_ORDER_SALE: Final = 0.08
-TAX_SELL_ORDER_TOTAL: Final = TAX_SELL_ORDER_SETUP + TAX_SELL_ORDER_SALE  # 0.13
+TAX_INSTANT_SELL: Final = 0.08  # legacy alias non-premium
+TAX_INSTANT_SELL_NON_PREMIUM: Final = 0.08
+TAX_INSTANT_SELL_PREMIUM: Final = 0.04
+
+TAX_SELL_ORDER_SETUP: Final = 0.025  # setup fee reduit en 2025 (etait 5%)
+TAX_SELL_ORDER_SALE: Final = 0.08  # legacy alias non-premium
+TAX_SELL_ORDER_SALE_NON_PREMIUM: Final = 0.08
+TAX_SELL_ORDER_SALE_PREMIUM: Final = 0.04
+TAX_SELL_ORDER_TOTAL: Final = TAX_SELL_ORDER_SETUP + TAX_SELL_ORDER_SALE  # legacy
+
+
+def instant_sell_tax(premium: bool) -> float:
+    """Retourne le taux d'instant sell selon le statut premium."""
+    return TAX_INSTANT_SELL_PREMIUM if premium else TAX_INSTANT_SELL_NON_PREMIUM
+
+
+def sell_order_total_tax(premium: bool) -> float:
+    """Retourne le taux total setup+sale d'un sell order selon le statut premium."""
+    sale = TAX_SELL_ORDER_SALE_PREMIUM if premium else TAX_SELL_ORDER_SALE_NON_PREMIUM
+    return TAX_SELL_ORDER_SETUP + sale
 
 # ---------------------------------------------------------------------------
 # Endpoints AODP (voir SPEC section 6.3)

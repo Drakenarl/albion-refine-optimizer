@@ -117,6 +117,7 @@ def compute_recovery_value(
     buy_orders: list[tuple[float, int]],
     *,
     data_age_hours: float | None = None,
+    premium: bool = False,
 ) -> RecoveryResult:
     """Valorise les retours RRR en instant sell, carnet d'achat à l'appui.
 
@@ -147,7 +148,7 @@ def compute_recovery_value(
     walk = walk_book_descending(buy_orders, demande)
     facteur = freshness_confidence_factor(data_age_hours)
     return RecoveryResult(
-        valeur=apply_instant_sell_tax(walk.total_cost) * facteur,
+        valeur=apply_instant_sell_tax(walk.total_cost, premium) * facteur,
         absorbe=walk.total_absorbed,
         demande=demande,
     )
@@ -346,14 +347,18 @@ def buy_side_inflation(
 # ---------------------------------------------------------------------------
 
 
-def apply_instant_sell_tax(gross: float) -> float:
-    """Applique la taxe d'instant sell (8%) à un revenu brut."""
-    return gross * (1.0 - config.TAX_INSTANT_SELL)
+def apply_instant_sell_tax(gross: float, premium: bool = False) -> float:
+    """Applique la taxe d'instant sell (8% non-premium / 4% premium) au revenu brut."""
+    return gross * (1.0 - config.instant_sell_tax(premium))
 
 
-def apply_sell_order_tax(gross: float) -> float:
-    """Applique la taxe totale de sell order (5% setup + 8% sale = 13%)."""
-    return gross * (1.0 - config.TAX_SELL_ORDER_TOTAL)
+def apply_sell_order_tax(gross: float, premium: bool = False) -> float:
+    """Applique la taxe totale de sell order (setup+sale) selon premium.
+
+    Non-premium : 2.5% setup + 8% sale = 10.5%.
+    Premium : 2.5% setup + 4% sale = 6.5%.
+    """
+    return gross * (1.0 - config.sell_order_total_tax(premium))
 
 
 # ---------------------------------------------------------------------------
@@ -441,6 +446,7 @@ def evaluate_instant_sell(
     planks: int,
     *,
     data_age_hours: float | None = None,
+    premium: bool = False,
 ) -> SalesScenario:
     """Évalue le scénario A (instant sell) : on remplit les buy orders existants.
 
@@ -468,7 +474,7 @@ def evaluate_instant_sell(
             stack_suffisant=False,
             data_age_hours=data_age_hours,
         )
-    revenu_net = apply_instant_sell_tax(walk.total_cost)
+    revenu_net = apply_instant_sell_tax(walk.total_cost, premium)
     facteur = freshness_confidence_factor(data_age_hours)
     revenu_pondere = revenu_net * facteur
     return SalesScenario(
@@ -496,6 +502,7 @@ def evaluate_sell_order(
     *,
     undercut_pct: float = 1.0,
     data_age_hours: float | None = None,
+    premium: bool = False,
 ) -> SalesScenario:
     """Évalue le scénario B (sell order) : on place un ordre sous-coté.
 
@@ -526,7 +533,7 @@ def evaluate_sell_order(
         )
     prix_listing = min_sell_price * (1.0 - undercut_pct / 100.0)
     revenu_brut = prix_listing * planks
-    revenu_net_if_filled = apply_sell_order_tax(revenu_brut)
+    revenu_net_if_filled = apply_sell_order_tax(revenu_brut, premium)
     proba = compute_fill_probability(
         quantity_to_sell=planks,
         volume_24h=volume_24h,

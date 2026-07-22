@@ -187,6 +187,44 @@ export const GLOSSARY: Record<string, ReactNode> = {
     </>
   ),
 
+  premium: (
+    <>
+      <p>
+        <strong>Ton statut Premium dans Albion Online.</strong>
+      </p>
+      <p className="mt-1.5 text-ink-muted">
+        <strong>Non-premium :</strong> taxe instant sell 8%, sell order 10.5%
+        (2.5% setup + 8% sale).
+      </p>
+      <p className="mt-1.5 text-ink-muted">
+        <strong>Premium :</strong> taxe instant sell 4%, sell order 6.5%
+        (2.5% setup + 4% sale).
+      </p>
+      <p className="mt-1.5 text-ink-muted">
+        Sur un run 3M silver de revenu, l'écart est de ~120k silver. Coche cette
+        case si ton personnage a un abonnement Premium actif.
+      </p>
+    </>
+  ),
+
+  silver_focus_hero: (
+    <>
+      <p>
+        <strong>La vraie métrique pour un raffineur premium.</strong>
+      </p>
+      <p className="mt-1.5 text-ink-muted">
+        Le focus est ta ressource rare (elle régénère lentement). Un run peut
+        avoir un beau ROI capital mais griller ton focus pour peu de silver
+        gagné — dans ce cas c'est une mauvaise affaire économique globale.
+      </p>
+      <p className="mt-1.5 text-ink-muted">
+        Un vrai refineur vise <span className="num">400 à 600 s/focus</span>{' '}
+        selon la matière et le tier. En dessous de 200, mauvais deal ; au-dessus
+        de 600, gros coup.
+      </p>
+    </>
+  ),
+
   station_rate: (
     <>
       <p>

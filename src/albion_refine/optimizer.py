@@ -81,6 +81,11 @@ class OptimizerParams(BaseModel):
     # ``_LEVELn@n``). La recette (qte de matiere + qte de raffine T-1) reste
     # celle du tier.
     enchant: int = Field(default=0, ge=0, le=4)
+    # V3.0 : statut premium du joueur. Impacte les taxes de vente :
+    # - Instant sell : 4% (premium) vs 8% (non-premium)
+    # - Sell order : 2.5% + 4% = 6.5% (premium) vs 2.5% + 8% = 10.5% (non-premium)
+    # Effet cumule sur un run 3M : ~120k silver de difference.
+    premium: bool = False
     # V2.9 : sourcing multi-villes.
     # ``max_source_cities`` cap le nombre de villes visitees pour un meme input
     # (bois ou plank T-1). 1 = comportement V2.8 (mono-source), 3 = compromis
@@ -330,6 +335,7 @@ def _recuperation(
     retour: float,
     ignore: bool,
     now: datetime,
+    premium: bool = False,
 ) -> market.RecoveryResult:
     """Valorise les retours RRR en instant sell dans la ville de vente choisie.
 
@@ -360,7 +366,10 @@ def _recuperation(
     profondeur = int(volume.total_volume_24h) if volume is not None else 0
     book = [(float(quote.buy_price_max), profondeur)]
     return market.compute_recovery_value(
-        retour, book, data_age_hours=market.age_hours(quote.buy_max_age(now))
+        retour,
+        book,
+        data_age_hours=market.age_hours(quote.buy_max_age(now)),
+        premium=premium,
     )
 
 
@@ -397,6 +406,7 @@ def _evaluate_sales(
         float(output_quote.buy_price_max),
         quantity,
         data_age_hours=market.age_hours(buy_age),
+        premium=params.premium,
     )
 
     # Scénario B — sell order (on place un ordre sous-coté).
@@ -411,6 +421,7 @@ def _evaluate_sales(
             volume_24h,
             undercut_pct=params.undercut_pct,
             data_age_hours=market.age_hours(sell_age),
+            premium=params.premium,
         )
         gain = scenario_b.expected_revenu - scenario_a.expected_revenu
         scenario_b.gain_marginal_vs_a = gain
@@ -575,6 +586,7 @@ def _build_route(
         refined.wood_retour,
         params.ignore_recup,
         now,
+        premium=params.premium,
     )
     recup_plank = (
         _recuperation(
@@ -583,6 +595,7 @@ def _build_route(
             refined.plank_moins_1_retour,
             params.ignore_recup,
             now,
+            premium=params.premium,
         )
         if plank_input_item is not None
         else market.RecoveryResult(valeur=0.0, absorbe=0, demande=0)

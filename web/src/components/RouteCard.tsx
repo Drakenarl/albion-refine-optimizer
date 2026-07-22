@@ -67,12 +67,35 @@ const RouteCard: FC<Props> = ({ route }) => {
               {' '}— {route.quantite} {labels.refined}s
             </span>
           </div>
-          <div className={cn('flex items-center gap-2 text-sm font-semibold', roiTone)}>
-            <TrendIcon className="h-4 w-4" />
-            <span className="inline-flex items-center gap-1">
-              ROI capital <InfoTooltip>{GLOSSARY.roi_capital}</InfoTooltip>
-            </span>
-            {fmtPct(route.marge_pct)}
+          {/* V3.0 : silver/focus hero quand focus actif, sinon ROI capital hero */}
+          <div className="flex items-center gap-3">
+            {route.silver_par_focus !== null ? (
+              <div className="flex flex-col items-end">
+                <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-ink-faint">
+                  Silver / focus{' '}
+                  <InfoTooltip>{GLOSSARY.silver_focus_hero}</InfoTooltip>
+                </span>
+                <span
+                  className={cn(
+                    'num text-lg font-bold',
+                    route.silver_par_focus >= 400
+                      ? 'text-positive'
+                      : route.silver_par_focus >= 200
+                        ? 'text-caution'
+                        : 'text-negative',
+                  )}
+                >
+                  {route.silver_par_focus.toFixed(0)} s
+                </span>
+              </div>
+            ) : null}
+            <div className={cn('flex items-center gap-1 text-sm font-semibold', roiTone)}>
+              <TrendIcon className="h-4 w-4" />
+              <span className="inline-flex items-center gap-1">
+                ROI <InfoTooltip>{GLOSSARY.roi_capital}</InfoTooltip>
+              </span>
+              {fmtPct(route.marge_pct)}
+            </div>
           </div>
         </div>
         <div className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
@@ -170,14 +193,7 @@ const RouteCard: FC<Props> = ({ route }) => {
           </div>
           <ScenarioBlock scenario={route.vente.scenario_a_instant_sell} slot="a" />
           <ScenarioBlock scenario={route.vente.scenario_b_sell_order} slot="b" />
-          {route.silver_par_focus !== null && (
-            <div className="rounded-md border border-surface-border/60 bg-surface/40 px-3 py-2 text-xs text-ink-muted">
-              <span className="text-ink-faint inline-flex items-center gap-1">
-                Silver / focus <InfoTooltip>{GLOSSARY.silver_par_focus}</InfoTooltip> :
-              </span>{' '}
-              <span className="num text-ink">{route.silver_par_focus.toFixed(2)} s</span>
-            </div>
-          )}
+          {/* Silver/focus a ete promu dans le header depuis V3.0, plus besoin ici. */}
         </section>
       </div>
 

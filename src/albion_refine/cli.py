@@ -86,6 +86,7 @@ def _build_params(
     exclude_achat: list[str],
     resource: ResourceKind,
     enchant: int,
+    premium: bool,
     max_source_cities: int,
     saturation_per_city: float,
 ) -> OptimizerParams:
@@ -119,6 +120,7 @@ def _build_params(
         excluded_sell_cities=list(config.DEFAULTS["excluded_sell_cities"]) + exclude_vente,
         resource=resource,
         enchant=enchant,
+        premium=premium,
         max_source_cities=max_source_cities,
         saturation_per_city=saturation_per_city,
     )
@@ -187,6 +189,16 @@ def optimize(
             max=4,
         ),
     ] = 0,
+    premium: Annotated[
+        bool,
+        typer.Option(
+            "--premium/--no-premium",
+            help=(
+                "Active le statut premium (taxes 4%% instant sell / 6.5%% sell order "
+                "au lieu de 8%% / 10.5%%). Peut faire ~120k silver de différence sur un run 3M."
+            ),
+        ),
+    ] = False,
     max_source_cities: Annotated[
         int,
         typer.Option(
@@ -244,6 +256,7 @@ def optimize(
         exclude_achat=exclude_achat or [],
         resource=resource,
         enchant=enchant,
+        premium=premium,
         max_source_cities=max_source_cities,
         saturation_per_city=saturation_per_city,
     )

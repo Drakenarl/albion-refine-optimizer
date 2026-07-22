@@ -31,6 +31,7 @@ interface FormState {
   quantite: string
   focusAvailable: string
   focus: boolean
+  premium: boolean
   stationRate: string
   seuilMarge: string
   server: string
@@ -54,6 +55,7 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
     quantite: '',
     focusAvailable: '',
     focus: true,
+    premium: false,
     stationRate: '',
     seuilMarge: '',
     server: 'europe',
@@ -85,6 +87,7 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
       server: state.server,
       resource: state.resource,
       enchant: state.enchant,
+      premium: state.premium,
     }
     if (state.mode === 'capital') payload.capital = Number(state.capital || DEFAULTS.capital)
     if (state.mode === 'fixed') payload.quantite = Number(state.quantite)
@@ -270,6 +273,25 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
               disabled={state.mode === 'focus'}
             />
             <span>{state.mode === 'focus' ? 'toujours actif en mode focus' : '+59% RRR'}</span>
+          </label>
+        </Field>
+
+        <Field
+          label={
+            <span className="inline-flex items-center gap-1">
+              Statut Premium
+              <InfoTooltip>{GLOSSARY.premium}</InfoTooltip>
+            </span>
+          }
+        >
+          <label className="flex h-10 items-center gap-2 text-sm text-ink-muted">
+            <input
+              type="checkbox"
+              checked={state.premium}
+              onChange={(e) => patch('premium', e.target.checked)}
+              className="h-4 w-4 rounded border-surface-border bg-surface accent-primary-500"
+            />
+            <span>Taxes réduites (4% instant / 6.5% sell order)</span>
           </label>
         </Field>
       </div>

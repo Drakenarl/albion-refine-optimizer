@@ -173,6 +173,7 @@ export interface OptimizeRequest {
   excluded_sell_cities?: string[]
   resource?: ResourceKind
   enchant?: number
+  premium?: boolean
   top_n?: number
   server?: string
   use_cache?: boolean

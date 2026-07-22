@@ -184,6 +184,48 @@ const HowItWorksModal: FC<Props> = ({ open, onClose }) => {
                 </p>
               </Section>
 
+              <Section
+                icon={<Coins className="h-4 w-4" />}
+                title="Silver / focus — la vraie métrique du raffineur premium"
+              >
+                <p>
+                  Beaucoup de gens regardent le ROI capital en premier ("+30% c'est
+                  bien"). Mais un raffineur premium expérimenté regarde d'abord{' '}
+                  <strong>silver / focus</strong>.
+                </p>
+                <p className="mt-2 text-ink-muted">
+                  Pourquoi ? Parce que ton focus est la ressource rare : il régénère
+                  lentement (~10 000/jour max). Une route à +30% ROI qui te grille
+                  10 000 focus pour 500k silver, c'est <strong>50 s/focus</strong>{' '}
+                  — mauvais deal. Une route à +5% ROI qui te ramène 400 s/focus,
+                  c'est ce qui te rend riche à long terme.
+                </p>
+                <Callout tone="info">
+                  <strong>Ordre de grandeur d'un vrai run premium :</strong>{' '}
+                  400-600 s/focus. En dessous de 200, cherche autre chose. Au-dessus
+                  de 600, saute dessus. Le badge en haut de chaque card est coloré
+                  en fonction (rouge / orange / vert).
+                </Callout>
+              </Section>
+
+              <Section
+                icon={<Sparkles className="h-4 w-4" />}
+                title="Le Premium — 4% de taxes au lieu de 8%"
+              >
+                <p>
+                  L'abonnement Premium d'Albion réduit tes taxes de vente :{' '}
+                  <strong>4% instant sell</strong> (vs 8%) et{' '}
+                  <strong>6.5% sell order</strong> (vs 10.5%). Sur un run 3M de revenu,
+                  l'écart est ~120k silver.
+                </p>
+                <p className="mt-2 text-ink-muted">
+                  Coche la case "Statut Premium" dans le formulaire si ton personnage
+                  a un abonnement actif. Le calcul intègre alors le bon taux, ce qui
+                  fait remonter la ROI et le silver/focus. Sans premium, les taxes
+                  te font perdre ~4 points de ROI supplémentaires.
+                </p>
+              </Section>
+
               <Section icon={<TrendingUp className="h-4 w-4" />} title="ROI capital vs marge efficacité">
                 <p>
                   Les deux chiffres qui ressemblent à des ROI ne mesurent PAS la même chose :
