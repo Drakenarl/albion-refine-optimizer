@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cp -r src/albion_refine api/albion_refine && cd web && npm install && npm run build",
+  "framework": null,
+  "buildCommand": "rm -rf api/albion_refine && cp -r src/albion_refine api/albion_refine && cd web && npm install && npm run build",
   "outputDirectory": "web/dist",
   "cleanUrls": true
 }
