@@ -46,13 +46,13 @@ class TestBuyInflationBareme:
         assert inflation.capped is False
 
     def test_slippage_qty_only(self) -> None:
-        # 40% du volume 24h -> palier 25-50 -> 5%.
+        # V2.8 : 40% du volume 24h -> palier 30-60% -> 10%.
         inflation = market.buy_side_inflation(
             quantity=4_000, volume_24h=10_000, age_hours_value=0.1
         )
-        assert inflation.slippage_qty == pytest.approx(0.05)
+        assert inflation.slippage_qty == pytest.approx(0.10)
         assert inflation.inflation_age == 0.0
-        assert inflation.total_factor == pytest.approx(1.05)
+        assert inflation.total_factor == pytest.approx(1.10)
 
     def test_inflation_age_only(self) -> None:
         # 2.5h -> palier 2-4h -> 10%.
@@ -64,14 +64,14 @@ class TestBuyInflationBareme:
         assert inflation.total_factor == pytest.approx(1.10)
 
     def test_combined_multiplicative(self) -> None:
-        # Cas de la capture utilisateur : ~40% du volume + 2.3h de vieux.
+        # V2.8 : cas de la capture utilisateur, ratio 40% -> 10% qty, age 2.3h -> 10%.
         inflation = market.buy_side_inflation(
             quantity=3_879, volume_24h=10_000, age_hours_value=2.3
         )
-        # 40% -> 5%, 2.3h -> 10%. Combine = (1.05 * 1.10) - 1 = 0.155.
-        assert inflation.slippage_qty == pytest.approx(0.05)
+        assert inflation.slippage_qty == pytest.approx(0.10)
         assert inflation.inflation_age == pytest.approx(0.10)
-        assert inflation.total_factor == pytest.approx(1.155)
+        # Combine = 1.10 * 1.10 - 1 = 0.21. Sous le cap 0.25.
+        assert inflation.total_factor == pytest.approx(1.21)
         assert inflation.capped is False
 
     def test_cap_at_25_pct(self) -> None:
@@ -83,14 +83,15 @@ class TestBuyInflationBareme:
         assert inflation.total_factor == pytest.approx(1.25)
         assert inflation.capped is True
 
-    def test_no_volume_data_no_qty_slippage(self) -> None:
-        # Sans historique de volume, on ne double-penalise pas : la composante
-        # profondeur est neutre, seule la freshness peut inflater.
+    def test_no_volume_marche_mort_max_slippage(self) -> None:
+        # V2.8 : volume=0 est desormais interprete comme "marche mort" et
+        # applique le max de la composante profondeur (20%). Le warning
+        # MARCHE_INACTIF sera pose en aval par l'optimizer.
         inflation = market.buy_side_inflation(
             quantity=100, volume_24h=0, age_hours_value=0.1
         )
-        assert inflation.slippage_qty == 0.0
-        assert inflation.total_factor == pytest.approx(1.0)
+        assert inflation.slippage_qty == pytest.approx(0.20)
+        assert inflation.total_factor == pytest.approx(1.20)
 
     def test_unknown_age_penalized(self) -> None:
         inflation = market.buy_side_inflation(
@@ -130,13 +131,13 @@ class TestSlippageAppliedInRoute:
         return optimize(params, quotes, volumes, now)
 
     def test_thin_market_inflates_buy_price(self) -> None:
-        # 400 bois demandes sur volume 500 = 80% -> slippage 10%.
-        # + age 2.3h -> inflation 10%. Total = 1.10 * 1.10 = 1.21.
+        # V2.8 : 400 bois demandes sur volume 500 = 80% -> palier 60-100% -> 15%.
+        # + age 2.3h -> inflation 10%. Total = 1.15 * 1.10 - 1 = 0.265 > cap 0.25.
         result = self._run(buy_volume=500)
         route = result.routes[0]
         assert route.achat_wood.prix_ref == pytest.approx(100.0)
-        assert route.achat_wood.prix_unitaire == pytest.approx(121.0)
-        assert route.achat_wood.slippage_pct == pytest.approx(21.0)
+        assert route.achat_wood.prix_unitaire == pytest.approx(125.0)  # cape a +25%
+        assert route.achat_wood.slippage_pct == pytest.approx(25.0)
         # Warning declenche (slippage > 8%).
         assert WarningCode.BUY_SLIPPAGE_ELEVE in route.warnings
 
@@ -158,10 +159,10 @@ class TestSlippageAppliedInRoute:
         assert deep.marge_pct > thin.marge_pct
 
 
-class TestSlippageBackwardsCompat:
-    """Sans volume, l'ancien comportement (prix_ref = prix_unitaire) est preserve."""
+class TestMarcheInactif:
+    """V2.8 : sans volume 24h connu, on suppose marche mort -> max slippage + warning."""
 
-    def test_no_volume_no_qty_slippage(self) -> None:
+    def test_no_volume_triggers_marche_inactif_and_max_slippage(self) -> None:
         now = datetime(2026, 7, 22, 15, 20, 0)
         when = datetime(2026, 7, 22, 15, 0, 0)  # fresh
         quotes = [
@@ -169,22 +170,23 @@ class TestSlippageBackwardsCompat:
             _q("T3_PLANKS", "Martlock", sell=200, when=when),
             _q("T4_PLANKS", "Lymhurst", sell=600, buy=500, when=when),
         ]
-        # AUCUN volume pour les items d'achat.
+        # AUCUN volume pour les items d'achat -> marche mort.
         volumes = [VolumeData(item_id="T4_PLANKS", city="Lymhurst", total_volume_24h=1000)]
         params = OptimizerParams(
             tier=4,
             mode=QuantityMode.FIXED,
             quantite=100,
             station_rate=100,
-            seuil_marge_min_pct=-1000,
+            seuil_marge_min_pct=-10_000,
         )
         result = optimize(params, quotes, volumes, now)
         route = result.routes[0]
-        # Sans volume + donnee fraiche -> aucune inflation.
-        assert route.achat_wood.prix_unitaire == pytest.approx(100.0)
+        # V2.8 : volume 0 -> slippage qty 20% -> prix_unitaire = 120s.
+        assert route.achat_wood.prix_unitaire == pytest.approx(120.0)
         assert route.achat_wood.prix_ref == pytest.approx(100.0)
-        assert route.achat_wood.slippage_pct == pytest.approx(0.0)
-        assert WarningCode.BUY_SLIPPAGE_ELEVE not in route.warnings
+        assert route.achat_wood.slippage_pct == pytest.approx(20.0)
+        assert WarningCode.BUY_SLIPPAGE_ELEVE in route.warnings
+        assert WarningCode.MARCHE_INACTIF in route.warnings
 
 
 class TestResourceKindStillWorks:
@@ -215,5 +217,5 @@ class TestResourceKindStillWorks:
         result = optimize(params, quotes, volumes, now)
         route = result.routes[0]
         assert route.achat_wood.item_id == "T4_HIDE"
-        # 200 hide demandes / 200 volume = 100% -> palier >= 100% -> 20% qty.
+        # V2.8 : 200 hide demandes / 200 volume = 100% -> palier >= 100% -> 20% qty.
         assert route.achat_wood.slippage_qty_pct == pytest.approx(20.0)

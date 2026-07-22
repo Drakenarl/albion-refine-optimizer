@@ -23,6 +23,7 @@ export type WarningCode =
   | 'RECUP_PARTIELLE'
   | 'RECUP_SATURATION'
   | 'BUY_SLIPPAGE_ELEVE'
+  | 'MARCHE_INACTIF'
 
 export interface SourcingLeg {
   kind: 'wood' | 'plank'

@@ -460,6 +460,19 @@ def _build_route(
     plank_slippage = plank_leg.slippage_pct or 0.0 if plank_leg is not None else 0.0
     if max(wood_slippage, plank_slippage) >= 8.0:
         warnings.append(WarningCode.BUY_SLIPPAGE_ELEVE)
+    # V2.8 : marche mort (aucun trade 24h) sur au moins une jambe d'achat.
+    wood_vol = volumes.get((wood_quote.item_id, wood_quote.city))
+    plank_vol = (
+        volumes.get((plank_quote.item_id, plank_quote.city)) if plank_quote is not None else None
+    )
+    wood_inactive = (wood_vol is None or wood_vol.total_volume_24h <= 0) and quantity > 0
+    plank_inactive = (
+        plank_quote is not None
+        and (plank_vol is None or plank_vol.total_volume_24h <= 0)
+        and refined.plank_moins_1_utilise > 0
+    )
+    if wood_inactive or plank_inactive:
+        warnings.append(WarningCode.MARCHE_INACTIF)
 
     return Route(
         tier=tier,
@@ -782,6 +795,8 @@ async def run_optimization(
     history_cities = all_buy
     async with AodpClient(server=server, use_cache=use_cache) as client:
         quotes = await client.get_prices(items, all_buy)
-        volumes = await client.get_history(items, history_cities)
+        # V2.8 : fenetre glissante 24h ancree sur ``reference`` (evite de
+        # cumuler ~10 jours d'historique et de surestimer 10x le volume).
+        volumes = await client.get_history(items, history_cities, now=reference)
 
     return optimize(params, quotes, volumes, reference)

@@ -71,10 +71,12 @@ class TestGetHistory:
         self, httpx_mock: HTTPXMock, history_raw_t7: list[dict[str, Any]], tmp_path: Path
     ) -> None:
         httpx_mock.add_response(json=history_raw_t7)
+        # V2.8 : la fixture couvre 2026-07-18T16 -> 2026-07-19T12 (20h) ; on
+        # ancre ``now`` juste apres, tous les buckets tombent dans la fenetre 24h.
+        now = datetime(2026, 7, 19, 14, 0, 0)
         async with AodpClient(cache_dir=tmp_path, use_cache=False) as client:
-            volumes = await client.get_history(["T7_PLANKS"], ["Caerleon"])
+            volumes = await client.get_history(["T7_PLANKS"], ["Caerleon"], now=now)
         caerleon = next(v for v in volumes if v.city == "Caerleon")
-        # Somme des item_count de la fixture Caerleon.
         assert caerleon.total_volume_24h == pytest.approx(342 + 415 + 388 + 267 + 291 + 356)
         assert caerleon.num_points == 6
 

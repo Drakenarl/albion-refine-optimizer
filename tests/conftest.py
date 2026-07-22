@@ -60,5 +60,14 @@ def prices_t7() -> list[PriceQuote]:
 
 @pytest.fixture
 def history_t7() -> list[VolumeData]:
-    """Historique T7 parsé en ``VolumeData``."""
-    return [_volume_from_entry(entry) for entry in load_fixture_raw("aodp_history_t7.json")]
+    """Historique T7 parsé en ``VolumeData``.
+
+    V2.8 : on ancre ``now`` sur la meme date que ``now_ref`` (2026-07-19 15:20)
+    pour que la fenetre glissante 24h contienne bien les points du fixture
+    (2026-07-18T16 -> 2026-07-19T12).
+    """
+    ref = datetime(2026, 7, 19, 15, 20, 0)
+    return [
+        _volume_from_entry(entry, now=ref)
+        for entry in load_fixture_raw("aodp_history_t7.json")
+    ]

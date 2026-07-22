@@ -39,7 +39,13 @@ class TestControlledRoute:
             _quote("T3_PLANKS", "Martlock", sell=200, when=when),
             _quote("T4_PLANKS", "Lymhurst", sell=600, buy=500, when=when),
         ]
-        volumes = [VolumeData(item_id="T4_PLANKS", city="Lymhurst", total_volume_24h=1000)]
+        # V2.8 : on ajoute des volumes epais aux items d'achat pour eviter que
+        # le slippage V2.7 gonfle les prix et casse les valeurs attendues.
+        volumes = [
+            VolumeData(item_id="T4_PLANKS", city="Lymhurst", total_volume_24h=1000),
+            VolumeData(item_id="T4_WOOD", city="Martlock", total_volume_24h=100_000),
+            VolumeData(item_id="T3_PLANKS", city="Martlock", total_volume_24h=100_000),
+        ]
         params = OptimizerParams(
             tier=4,
             mode=QuantityMode.FIXED,
@@ -108,7 +114,12 @@ class TestScenarioAFiltering:
             # Spread énorme : marge A ~15%, marge B ~29%.
             _quote("T4_PLANKS", "Lymhurst", sell=600, buy=500, when=when),
         ]
-        volumes = [VolumeData(item_id="T4_PLANKS", city="Lymhurst", total_volume_24h=1000)]
+        # V2.8 : volumes epais pour eviter slippage.
+        volumes = [
+            VolumeData(item_id="T4_PLANKS", city="Lymhurst", total_volume_24h=1000),
+            VolumeData(item_id="T4_WOOD", city="Martlock", total_volume_24h=100_000),
+            VolumeData(item_id="T3_PLANKS", city="Martlock", total_volume_24h=100_000),
+        ]
         params = OptimizerParams(
             tier=4,
             mode=QuantityMode.FIXED,
@@ -144,7 +155,12 @@ class TestFreshnessWeighting:
             _quote("T3_PLANKS", "Martlock", sell=100, when=achat),
             _quote("T4_PLANKS", "Lymhurst", sell=600, buy=500, when=vente),
         ]
-        volumes = [VolumeData(item_id="T4_PLANKS", city="Lymhurst", total_volume_24h=1000)]
+        # V2.8 : volumes epais pour eviter slippage.
+        volumes = [
+            VolumeData(item_id="T4_PLANKS", city="Lymhurst", total_volume_24h=1000),
+            VolumeData(item_id="T4_WOOD", city="Martlock", total_volume_24h=100_000),
+            VolumeData(item_id="T3_PLANKS", city="Martlock", total_volume_24h=100_000),
+        ]
         params = OptimizerParams(
             tier=4,
             mode=QuantityMode.FIXED,

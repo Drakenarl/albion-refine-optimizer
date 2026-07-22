@@ -51,6 +51,13 @@ const CONFIG: Record<
       'Slippage combine (profondeur + fraicheur) > 8% : le sell_price_min AODP est probablement loin de la realite. Verifie le carnet en jeu avant de committer.',
     classes: 'text-caution bg-caution/10 border-caution/40',
   },
+  MARCHE_INACTIF: {
+    icon: <AlertOctagon className="h-3.5 w-3.5" />,
+    label: 'Marché inactif',
+    description:
+      "Aucun trade recense sur les dernieres 24h dans la ville d'achat : le carnet est probablement quasi-vide. Le prix affiche peut etre tres vieux.",
+    classes: 'text-critical bg-critical/10 border-critical/40',
+  },
 }
 
 const WarningBadge: FC<Props> = ({ code, detail }) => {

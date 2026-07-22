@@ -84,6 +84,11 @@ class WarningCode(StrEnum):
     # jambe d'achat. Signale que le sell_price_min AODP est probablement loin
     # de la realite du carnet -> confirme le prix en jeu avant de committer.
     BUY_SLIPPAGE_ELEVE = "BUY_SLIPPAGE_ELEVE"
+    # V2.8 : aucun trade recense sur les dernieres 24h dans la ville d'achat
+    # (volume_24h glissant = 0). Le sell_price_min AODP peut etre tres ancien
+    # et le carnet est probablement quasi-vide : achete ce qui existe puis pose
+    # tes propres buy orders si tu veux la suite.
+    MARCHE_INACTIF = "MARCHE_INACTIF"
 
 
 # Date sentinelle renvoyée par l'AODP quand aucune donnée n'existe.

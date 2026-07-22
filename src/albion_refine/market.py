@@ -255,15 +255,24 @@ BUY_INFLATION_CAP: float = 0.25  # +25% max, cf commentaire ci-dessus.
 
 
 def _slippage_from_ratio(ratio: float) -> float:
-    """Barème d'inflation liee a la profondeur (quantite demandee / volume 24h)."""
-    if ratio < 0.10:
+    """Barème d'inflation liee a la profondeur (quantite demandee / volume 24h).
+
+    Recalibre V2.8 : le volume 24h est desormais un vrai volume 24h glissant
+    (avant, on cumulait ~10 jours donc on sous-estimait tres fortement le
+    ratio). Les paliers sont donc plus serres qu'en V2.7 pour compenser :
+    payer 30% du volume 24h moyenne c'est deja racler significativement le
+    carnet, on ne peut pas se permettre 5% de slippage.
+    """
+    if ratio < 0.05:
         return 0.0
-    if ratio < 0.25:
+    if ratio < 0.15:
         return 0.02
-    if ratio < 0.50:
+    if ratio < 0.30:
         return 0.05
-    if ratio < 1.00:
+    if ratio < 0.60:
         return 0.10
+    if ratio < 1.00:
+        return 0.15
     return 0.20
 
 
@@ -308,12 +317,14 @@ def buy_side_inflation(
     Returns:
         Un ``BuyInflation`` detaillant les composantes et le facteur total.
     """
-    if volume_24h <= 0 or quantity <= 0:
-        # Sans historique de volume exploitable, on ne peut pas estimer la
-        # profondeur. On laisse la composante profondeur a 0 : la composante
-        # fraicheur (age de la donnee) prend deja le relais pour signaler
-        # l'incertitude. Eviter la double penalite.
+    if quantity <= 0:
         slippage = 0.0
+    elif volume_24h <= 0:
+        # V2.8 : aucun trade dans les dernieres 24h -> marche mort. Impossible
+        # de racler un carnet a un prix raisonnable. On applique le max de la
+        # composante profondeur (20%) et un warning specifique sera pose en
+        # amont (MARCHE_INACTIF). Le cap total (25%) protege quand meme.
+        slippage = 0.20
     else:
         slippage = _slippage_from_ratio(quantity / volume_24h)
     inflation = _inflation_from_age(age_hours_value)

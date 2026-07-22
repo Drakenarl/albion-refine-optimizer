@@ -95,18 +95,44 @@ def _quote_from_entry(entry: dict[str, Any]) -> PriceQuote:
     )
 
 
-def _volume_from_entry(entry: dict[str, Any]) -> VolumeData:
-    """Convertit une entrée brute de l'endpoint ``/history`` en ``VolumeData``."""
+from datetime import timedelta as _timedelta  # alias local pour eviter les imports circulaires
+
+
+def _volume_from_entry(
+    entry: dict[str, Any], now: datetime | None = None, window_hours: int = 24
+) -> VolumeData:
+    """Convertit une entrée brute de l'endpoint ``/history`` en ``VolumeData``.
+
+    Depuis V2.8 : l'AODP renvoie un historique de ~10 jours de buckets. On
+    filtre les points pour ne conserver que ceux tombant dans la fenetre
+    ``[now - window_hours, now]``. ``total_volume_24h`` reflete donc bien
+    l'activite des dernieres 24h (par defaut), pas 10 jours cumules.
+
+    Args:
+        entry: L'entree brute JSON d'AODP.
+        now: Instant de reference (par defaut : ``datetime.utcnow()`` naive).
+        window_hours: Largeur de la fenetre en heures (par defaut : 24).
+    """
+    reference = now or datetime.utcnow()
+    cutoff = reference - _timedelta(hours=window_hours)
     points: list[dict[str, Any]] = entry.get("data") or []
-    total = float(sum(point.get("item_count", 0) for point in points))
-    timestamps = [parse_aodp_date(point.get("timestamp")) for point in points]
-    valid = [ts for ts in timestamps if ts is not None]
+    total = 0.0
+    valid_timestamps: list[datetime] = []
+    in_window = 0
+    for point in points:
+        ts = parse_aodp_date(point.get("timestamp"))
+        if ts is not None:
+            valid_timestamps.append(ts)
+        # Ne cumule que les buckets tombant dans la fenetre de reference.
+        if ts is not None and ts >= cutoff and ts <= reference:
+            total += float(point.get("item_count", 0))
+            in_window += 1
     return VolumeData(
         item_id=entry["item_id"],
         city=entry.get("location", entry.get("city", "")),
         total_volume_24h=total,
-        latest_timestamp=max(valid) if valid else None,
-        num_points=len(points),
+        latest_timestamp=max(valid_timestamps) if valid_timestamps else None,
+        num_points=in_window,
     )
 
 
@@ -206,7 +232,10 @@ class AodpClient:
             "qualities": config.FORCED_QUALITY,
         }
         if "history" in path_template:
-            params["time-scale"] = 24
+            # V2.8 : passe a time-scale=6 pour recevoir des buckets de 6h.
+            # Une fenetre 24h reelle = 4 buckets de 6h ; c'est agrege plus tard
+            # dans ``_volume_from_entry`` en filtrant sur ``now - 24h``.
+            params["time-scale"] = 6
 
         payload = await self._request_with_retries(url, params)
 
@@ -247,15 +276,29 @@ class AodpClient:
         raw = await self._fetch_json(config.PRICES_PATH, item_ids, cities)
         return [_quote_from_entry(entry) for entry in raw]
 
-    async def get_history(self, item_ids: list[str], cities: list[str]) -> list[VolumeData]:
-        """Récupère les volumes 24h d'items dans plusieurs villes.
+    async def get_history(
+        self,
+        item_ids: list[str],
+        cities: list[str],
+        *,
+        now: datetime | None = None,
+        window_hours: int = 24,
+    ) -> list[VolumeData]:
+        """Récupère les volumes sur une fenêtre glissante récente.
+
+        L'AODP renvoie un historique de ~10 jours en buckets de 6h ; on filtre
+        pour ne conserver que les buckets tombant dans les ``window_hours``
+        heures precedant ``now``. Le champ ``total_volume_24h`` du ``VolumeData``
+        represente donc bien l'activite recente, pas un cumul multi-jours.
 
         Args:
             item_ids: Liste d'item IDs.
             cities: Liste de villes.
+            now: Instant de reference (defaut : ``datetime.utcnow()``).
+            window_hours: Largeur de la fenetre (defaut : 24h).
 
         Returns:
             La liste des ``VolumeData`` correspondants.
         """
         raw = await self._fetch_json(config.HISTORY_PATH, item_ids, cities)
-        return [_volume_from_entry(entry) for entry in raw]
+        return [_volume_from_entry(entry, now=now, window_hours=window_hours) for entry in raw]
