@@ -30,6 +30,7 @@ from albion_refine.models import (
     Route,
     RunMetadata,
     SalesScenario,
+    SourcingAllocation,
     SourcingLeg,
     VenteBlock,
     VolumeData,
@@ -80,6 +81,16 @@ class OptimizerParams(BaseModel):
     # ``_LEVELn@n``). La recette (qte de matiere + qte de raffine T-1) reste
     # celle du tier.
     enchant: int = Field(default=0, ge=0, le=4)
+    # V2.9 : sourcing multi-villes.
+    # ``max_source_cities`` cap le nombre de villes visitees pour un meme input
+    # (bois ou plank T-1). 1 = comportement V2.8 (mono-source), 3 = compromis
+    # realiste, 6 = pas de cap. Contrainte reelle du joueur : temps de
+    # transport et risque PvP entre villes.
+    max_source_cities: int = Field(default=3, ge=1, le=6)
+    # ``saturation_per_city`` = fraction du volume 24h qu'on est pret a racler
+    # dans une ville avant de passer a la suivante (defaut 25%). Au-dela, on
+    # ecrase le carnet et le slippage explose.
+    saturation_per_city: float = Field(default=0.25, ge=0.05, le=1.0)
     top_n: int = 3
 
     def buy_cities(self) -> list[str]:
@@ -136,49 +147,180 @@ def _resolve_quantity(params: OptimizerParams, unit_gross_cost: float) -> int:
             return int(params.capital // unit_gross_cost)
 
 
-def _make_leg(
-    kind: str,
-    tier: int,
+def _build_allocation(
     quote: PriceQuote,
-    quantity: int,
+    take_qty: int,
+    volume_24h: float,
     now: datetime,
     params: OptimizerParams,
-    volume: VolumeData | None,
-) -> SourcingLeg:
-    """Construit un ``SourcingLeg`` (achat bois ou plank) à partir d'un quote.
-
-    Depuis V2.7, le prix effectif utilise dans le cout total est le
-    sell_price_min AODP gonfle d'un facteur d'inflation qui modelise la
-    profondeur reelle du carnet (proxy via volume 24h) et la fraicheur de la
-    donnee. Cela evite de sur-estimer une route dont on croit acheter la
-    quantite entiere au top du carnet.
-    """
+) -> SourcingAllocation:
+    """Construit une ``SourcingAllocation`` avec slippage recalcule."""
     age = quote.sell_min_age(now)
     age_hours_value = market.age_hours(age)
     freshness = market.classify_freshness(
         age, params.freshness_warning_hours, params.freshness_critical_hours
     )
     inflation = market.buy_side_inflation(
-        quantity=quantity,
-        volume_24h=volume.total_volume_24h if volume is not None else 0.0,
+        quantity=take_qty,
+        volume_24h=volume_24h,
         age_hours_value=age_hours_value,
     )
     prix_ref = float(quote.sell_price_min)
     prix_effectif = prix_ref * inflation.total_factor
-    return SourcingLeg(
-        kind=kind,
-        item_id=quote.item_id,
-        tier=tier,
+    return SourcingAllocation(
         city=quote.city,
-        prix_unitaire=prix_effectif,
+        quantite=take_qty,
         prix_ref=prix_ref,
+        prix_unitaire=prix_effectif,
+        cout_total=take_qty * prix_effectif,
         slippage_pct=(inflation.total_factor - 1.0) * 100.0,
         slippage_qty_pct=inflation.slippage_qty * 100.0,
         slippage_age_pct=inflation.inflation_age * 100.0,
-        quantite=quantity,
-        cout_total=quantity * prix_effectif,
         data_age_hours=age_hours_value,
         freshness=freshness,
+    )
+
+
+def _allocate_input(
+    item_id: str,
+    quantity_needed: int,
+    params: OptimizerParams,
+    quotes: QuoteIndex,
+    volumes: VolumeIndex,
+    now: datetime,
+) -> list[SourcingAllocation]:
+    """Alloue ``quantity_needed`` unites de ``item_id`` sur plusieurs villes.
+
+    Algorithme (Option A greedy simple, V2.9) :
+    1. Rassemble les villes candidates (quote valide + non critique).
+    2. Trie par ``sell_price_min`` ascendant.
+    3. Iteratif : prend ``min(qte_restante, volume_24h × saturation_per_city)``
+       a chaque ville puis passe a la suivante, jusqu'a ``max_source_cities``
+       villes atteintes ou quantite comblee.
+    4. S'il reste de la quantite non allouee apres saturation naturelle des
+       villes autorisees, on repartit le reste sur les allocations existantes
+       (par ordre inverse de prix, en acceptant plus de slippage).
+
+    Returns:
+        La liste des allocations (potentiellement vide si aucun candidat).
+    """
+    candidates: list[tuple[PriceQuote, float]] = []
+    for city in params.buy_cities():
+        quote = quotes.get((item_id, city))
+        if quote is None or not quote.has_sell_offer:
+            continue
+        if _leg_is_critical(quote, now, params):
+            continue
+        vol = volumes.get((item_id, city))
+        vol_24h = vol.total_volume_24h if vol is not None else 0.0
+        candidates.append((quote, vol_24h))
+
+    if not candidates:
+        return []
+
+    candidates.sort(key=lambda c: c[0].sell_price_min)
+
+    remaining = quantity_needed
+    allocations: list[SourcingAllocation] = []
+    # Index (city -> (quote, vol_24h)) pour retrouver vite les infos d'une ville.
+    by_city = {q.city: (q, v) for q, v in candidates}
+
+    for quote, vol_24h in candidates:
+        if remaining <= 0:
+            break
+        if len(allocations) >= params.max_source_cities:
+            break
+        if vol_24h > 0:
+            city_cap = max(1, int(vol_24h * params.saturation_per_city))
+            take = min(remaining, city_cap)
+        else:
+            take = min(remaining, max(1, quantity_needed // 10))
+        if take <= 0:
+            continue
+
+        # Proposition : ajouter une nouvelle allocation dans cette ville.
+        proposed = _build_allocation(quote, take, vol_24h, now, params)
+
+        # Alternative : etendre la derniere allocation (rester dans la meme ville
+        # cheapest, meme si le slippage grimpe). On garde ce qui coute le moins
+        # en cout marginal (nouveau cout - cout deja engage).
+        if allocations:
+            last = allocations[-1]
+            last_quote, last_vol = by_city[last.city]
+            extended_qty = last.quantite + take
+            extended = _build_allocation(last_quote, extended_qty, last_vol, now, params)
+            marginal_cost_extend = extended.cout_total - last.cout_total
+            if marginal_cost_extend <= proposed.cout_total:
+                # Rester dans la ville precedente est plus economique -> on
+                # etend au lieu d'ouvrir un nouveau front.
+                allocations[-1] = extended
+                remaining -= take
+                continue
+
+        allocations.append(proposed)
+        remaining -= take
+
+    if remaining > 0 and allocations:
+        # Reste a placer apres saturation des villes autorisees : on etend la
+        # derniere allocation en acceptant plus de slippage (cape a +25%).
+        last = allocations[-1]
+        last_quote, last_vol = by_city[last.city]
+        new_qty = last.quantite + remaining
+        allocations[-1] = _build_allocation(last_quote, new_qty, last_vol, now, params)
+        remaining = 0
+
+    return allocations
+
+
+def _leg_from_allocations(
+    kind: str, item_id: str, tier: int, allocations: list[SourcingAllocation]
+) -> SourcingLeg:
+    """Agrege une liste d'allocations en un ``SourcingLeg`` (V2.9).
+
+    Les champs de synthese (``prix_unitaire``, ``prix_ref``, ``slippage_pct``,
+    ``data_age_hours``) sont des moyennes ponderees par la quantite. La ville
+    principale est celle qui porte le plus gros volume alloue. La fraicheur
+    est la pire des allocations (conservateur).
+    """
+    total_qty = sum(a.quantite for a in allocations)
+    if total_qty == 0:
+        raise ValueError("Allocations vides ou quantite nulle")
+    total_cost = sum(a.cout_total for a in allocations)
+    prix_ref_pondere = sum(a.quantite * a.prix_ref for a in allocations) / total_qty
+    slippage_pondere = sum(a.quantite * a.slippage_pct for a in allocations) / total_qty
+    slippage_qty_pondere = sum(a.quantite * a.slippage_qty_pct for a in allocations) / total_qty
+    slippage_age_pondere = sum(a.quantite * a.slippage_age_pct for a in allocations) / total_qty
+    # Age moyen pondere sur les allocations qui ont une donnee d'age.
+    ages_valides = [(a.quantite, a.data_age_hours) for a in allocations if a.data_age_hours is not None]
+    age_pondere: float | None = None
+    if ages_valides:
+        total_valid_qty = sum(q for q, _ in ages_valides)
+        age_pondere = sum(q * age for q, age in ages_valides) / total_valid_qty
+    # Fraicheur = la pire (ordre CRITICAL > WARNING > UNKNOWN > FRESH).
+    fresh_priority = {
+        FreshnessLevel.CRITICAL: 3,
+        FreshnessLevel.WARNING: 2,
+        FreshnessLevel.UNKNOWN: 1,
+        FreshnessLevel.FRESH: 0,
+    }
+    worst_fresh = max(allocations, key=lambda a: fresh_priority[a.freshness]).freshness
+    # Ville principale = celle qui porte le plus gros.
+    main_city = max(allocations, key=lambda a: a.quantite).city
+    return SourcingLeg(
+        kind=kind,
+        item_id=item_id,
+        tier=tier,
+        city=main_city,
+        prix_unitaire=total_cost / total_qty,
+        prix_ref=prix_ref_pondere,
+        slippage_pct=slippage_pondere,
+        slippage_qty_pct=slippage_qty_pondere,
+        slippage_age_pct=slippage_age_pondere,
+        quantite=total_qty,
+        cout_total=total_cost,
+        data_age_hours=age_pondere,
+        freshness=worst_fresh,
+        allocations=allocations,
     )
 
 
@@ -332,21 +474,61 @@ def _collect_warnings(
     return warnings
 
 
+def _cheapest_candidate(
+    item_id: str | None,
+    params: OptimizerParams,
+    quotes: QuoteIndex,
+    now: datetime,
+) -> PriceQuote | None:
+    """Retourne le quote au sell_price_min le plus bas parmi les villes valides."""
+    if item_id is None:
+        return None
+    best: PriceQuote | None = None
+    for city in params.buy_cities():
+        q = quotes.get((item_id, city))
+        if q is None or not q.has_sell_offer:
+            continue
+        if _leg_is_critical(q, now, params):
+            continue
+        if best is None or q.sell_price_min < best.sell_price_min:
+            best = q
+    return best
+
+
 def _build_route(
     params: OptimizerParams,
-    wood_quote: PriceQuote,
-    plank_quote: PriceQuote | None,
+    *,
+    wood_item: str,
+    plank_input_item: str | None,
     output_quote: PriceQuote,
     volume: VolumeData | None,
     quotes: QuoteIndex,
     volumes: VolumeIndex,
     now: datetime,
 ) -> Route | None:
-    """Évalue une combinaison complète et retourne une ``Route`` (ou ``None``)."""
+    """Evalue une route complete et retourne une ``Route`` (ou ``None``).
+
+    V2.9 : le sourcing est desormais multi-villes. Au lieu d'une paire fixee
+    (wood_city, plank_city), on alloue automatiquement la quantite requise sur
+    plusieurs villes via ``_allocate_input`` (greedy tri par prix + saturation
+    per city).
+    """
     tier = params.tier
-    plank_price = float(plank_quote.sell_price_min) if plank_quote is not None else 0.0
+
+    # Bootstrap de la quantite : on utilise le prix le plus bas des candidats
+    # trouves (approximation raisonnable ; l'allocation reelle peut coûter
+    # marginalement plus mais l'ordre de grandeur reste bon en mode capital).
+    cheapest_wood = _cheapest_candidate(wood_item, params, quotes, now)
+    if cheapest_wood is None:
+        return None
+    cheapest_plank: PriceQuote | None = None
+    if plank_input_item is not None:
+        cheapest_plank = _cheapest_candidate(plank_input_item, params, quotes, now)
+        if cheapest_plank is None:
+            return None
+    plank_price_boot = float(cheapest_plank.sell_price_min) if cheapest_plank else 0.0
     unit_gross = refining.unit_gross_cost(
-        tier, float(wood_quote.sell_price_min), plank_price, params.station_rate
+        tier, float(cheapest_wood.sell_price_min), plank_price_boot, params.station_rate
     )
     quantity = _resolve_quantity(params, unit_gross)
     if quantity <= 0:
@@ -364,54 +546,45 @@ def _build_route(
     if sale is None:
         return None
 
-    wood_leg = _make_leg(
-        "wood",
-        tier,
-        wood_quote,
-        refined.wood_utilise,
-        now,
-        params,
-        volumes.get((wood_quote.item_id, wood_quote.city)),
+    # V2.9 : allocation multi-villes de chaque input.
+    wood_allocations = _allocate_input(
+        wood_item, refined.wood_utilise, params, quotes, volumes, now
     )
-    plank_leg = (
-        _make_leg(
-            "plank",
-            tier - 1,
-            plank_quote,
-            refined.plank_moins_1_utilise,
-            now,
-            params,
-            volumes.get((plank_quote.item_id, plank_quote.city)),
+    if not wood_allocations:
+        return None
+    wood_leg = _leg_from_allocations("wood", wood_item, tier, wood_allocations)
+
+    plank_leg: SourcingLeg | None = None
+    if plank_input_item is not None and refined.plank_moins_1_utilise > 0:
+        plank_allocations = _allocate_input(
+            plank_input_item, refined.plank_moins_1_utilise, params, quotes, volumes, now
         )
-        if plank_quote is not None
-        else None
-    )
+        if not plank_allocations:
+            return None
+        plank_leg = _leg_from_allocations("plank", plank_input_item, tier - 1, plank_allocations)
 
     cout_focus = refined.focus_utilise * params.cost_per_focus
     cout_plank = plank_leg.cout_total if plank_leg is not None else 0.0
     cout_total = wood_leg.cout_total + cout_plank + refined.cout_station + cout_focus
 
-    # Depuis V2.5, la recup RRR est toujours vendue dans la meme ville que les
-    # raffines finis (workflow reel du raffineur : un seul deplacement). L'ancien
-    # mode LOCAL, qui la forcait a la ville specialite, etait un cas particulier
-    # de with-planks quand la ville de vente est deja la ville specialite.
+    # La recup RRR est toujours vendue dans la meme ville que les raffines finis.
     recup_city = output_quote.city
     recup_wood = _recuperation(
-        quotes.get((wood_quote.item_id, recup_city)),
-        volumes.get((wood_quote.item_id, recup_city)),
+        quotes.get((wood_item, recup_city)),
+        volumes.get((wood_item, recup_city)),
         refined.wood_retour,
         params.ignore_recup,
         now,
     )
     recup_plank = (
         _recuperation(
-            quotes.get((plank_quote.item_id, recup_city)),
-            volumes.get((plank_quote.item_id, recup_city)),
+            quotes.get((plank_input_item, recup_city)),
+            volumes.get((plank_input_item, recup_city)),
             refined.plank_moins_1_retour,
             params.ignore_recup,
             now,
         )
-        if plank_quote is not None
+        if plank_input_item is not None
         else market.RecoveryResult(valeur=0.0, absorbe=0, demande=0)
     )
     recup_totale = recup_wood.valeur + recup_plank.valeur
@@ -443,33 +616,28 @@ def _build_route(
         params.freshness_warning_hours,
         params.freshness_critical_hours,
     )
-    cities = {wood_quote.city, output_quote.city}
+    # V2.9 : les villes visitees sont l'union des allocations + la ville de vente.
+    cities = {output_quote.city}
+    cities.update(a.city for a in wood_leg.allocations)
     legs_fresh = [wood_leg.freshness, chosen_fresh]
     if plank_leg is not None:
-        cities.add(plank_leg.city)
+        cities.update(a.city for a in plank_leg.allocations)
         legs_fresh.append(plank_leg.freshness)
     warnings = _collect_warnings(cities, legs_fresh, volume, quantity)
     if recup_wood.partielle or recup_plank.partielle:
         warnings.append(WarningCode.RECUP_PARTIELLE)
-    if _recup_saturates(recup_wood, recup_plank, wood_quote, plank_quote, recup_city, volumes):
+    if _recup_saturates(recup_wood, recup_plank, wood_item, plank_input_item, recup_city, volumes):
         warnings.append(WarningCode.RECUP_SATURATION)
-    # V2.7 : signale un slippage buy > 8% sur au moins une jambe. C'est un
-    # seuil arbitraire qui separe "route un peu risquee mais probablement OK"
-    # d'"attention, verifie tres serieusement le carnet en jeu".
+    # V2.7 : signale un slippage buy > 8% sur au moins une jambe.
     wood_slippage = wood_leg.slippage_pct or 0.0
     plank_slippage = plank_leg.slippage_pct or 0.0 if plank_leg is not None else 0.0
     if max(wood_slippage, plank_slippage) >= 8.0:
         warnings.append(WarningCode.BUY_SLIPPAGE_ELEVE)
-    # V2.8 : marche mort (aucun trade 24h) sur au moins une jambe d'achat.
-    wood_vol = volumes.get((wood_quote.item_id, wood_quote.city))
-    plank_vol = (
-        volumes.get((plank_quote.item_id, plank_quote.city)) if plank_quote is not None else None
-    )
-    wood_inactive = (wood_vol is None or wood_vol.total_volume_24h <= 0) and quantity > 0
-    plank_inactive = (
-        plank_quote is not None
-        and (plank_vol is None or plank_vol.total_volume_24h <= 0)
-        and refined.plank_moins_1_utilise > 0
+    # V2.8 : marche mort si au moins une allocation a un volume 24h nul (le
+    # slippage_qty_pct de la composante y vaut alors son max, 20%).
+    wood_inactive = any(a.slippage_qty_pct >= 20.0 for a in wood_leg.allocations)
+    plank_inactive = plank_leg is not None and any(
+        a.slippage_qty_pct >= 20.0 for a in plank_leg.allocations
     )
     if wood_inactive or plank_inactive:
         warnings.append(WarningCode.MARCHE_INACTIF)
@@ -510,18 +678,12 @@ def _build_route(
 def _recup_saturates(
     recup_wood: market.RecoveryResult,
     recup_plank: market.RecoveryResult,
-    wood_quote: PriceQuote,
-    plank_quote: PriceQuote | None,
+    wood_item: str,
+    plank_input_item: str | None,
     recup_city: str,
     volumes: VolumeIndex,
 ) -> bool:
-    """Vrai si la récup à écouler dépasse ``_SATURATION_RATIO`` du volume 24h.
-
-    Levé quand tu comptes revendre un stack important dans la ville où tu
-    viens d'acheter : tu risques d'écraser le carnet (buy_max qui s'effondre à
-    mesure que tu remplis les ordres). Le walk_book gère la profondeur exacte
-    quand elle est connue ; ce warning est un garde-fou qualitatif en amont.
-    """
+    """Vrai si la récup à écouler dépasse ``_SATURATION_RATIO`` du volume 24h."""
 
     def _saturates(res: market.RecoveryResult, item_id: str) -> bool:
         if res.demande <= 0:
@@ -531,9 +693,9 @@ def _recup_saturates(
             return False
         return res.demande > _SATURATION_RATIO * vol.total_volume_24h
 
-    if _saturates(recup_wood, wood_quote.item_id):
+    if _saturates(recup_wood, wood_item):
         return True
-    return plank_quote is not None and _saturates(recup_plank, plank_quote.item_id)
+    return plank_input_item is not None and _saturates(recup_plank, plank_input_item)
 
 
 def _sort_key(params: OptimizerParams) -> Callable[[Route], tuple[float, float]]:
@@ -640,39 +802,6 @@ def _plank_input_item(tier: int, res: Resource, enchant: int = 0) -> str | None:
     return res.refined_item_id(tier - 1, enchant)
 
 
-def _plank_input_candidates(
-    params: OptimizerParams,
-    quotes: QuoteIndex,
-    plank_input_item: str | None,
-    now: datetime,
-) -> list[PriceQuote | None]:
-    """Liste les quotes de plank T-1 exploitables pour la phase 2 de sourcing.
-
-    Si la recette du tier ne consomme aucun plank T-1 (cas du T2), la phase 2
-    est court-circuitée : on retourne une unique branche ``None``.
-
-    Args:
-        params: Paramètres du run.
-        quotes: Index des prix par ``(item_id, ville)``.
-        plank_input_item: Item ID du plank T-1.
-        now: Instant de référence pour la fraîcheur.
-
-    Returns:
-        La liste des quotes candidates, ou ``[None]`` si aucun plank n'est requis.
-    """
-    if plank_input_item is None:
-        return [None]
-    candidates: list[PriceQuote | None] = []
-    for plank_city in params.buy_cities():
-        quote = quotes.get((plank_input_item, plank_city))
-        if quote is None or not quote.has_sell_offer:
-            continue
-        if _leg_is_critical(quote, now, params):
-            continue
-        candidates.append(quote)
-    return candidates
-
-
 def optimize(
     params: OptimizerParams,
     quotes_list: list[PriceQuote],
@@ -699,30 +828,27 @@ def optimize(
     plank_input_item = _plank_input_item(params.tier, res, params.enchant)
     output_item = res.refined_item_id(params.tier, params.enchant)
 
+    # V2.9 : plus de boucle wood_city/plank_city. L'allocation multi-villes
+    # est calculee UNE fois pour chaque input, puis on boucle uniquement sur
+    # les sell_cities (car chaque destination donne un revenu different et une
+    # ville de recup differente).
     candidates: list[Route] = []
-    for wood_city in params.buy_cities():
-        wood_quote = quotes.get((wood_item, wood_city))
-        if wood_quote is None or not wood_quote.has_sell_offer:
+    for sell_city in params.sell_cities():
+        output_quote = quotes.get((output_item, sell_city))
+        if output_quote is None:
             continue
-        if _leg_is_critical(wood_quote, now, params):
-            continue
-        for plank_quote in _plank_input_candidates(params, quotes, plank_input_item, now):
-            for sell_city in params.sell_cities():
-                output_quote = quotes.get((output_item, sell_city))
-                if output_quote is None:
-                    continue
-                route = _build_route(
-                    params,
-                    wood_quote,
-                    plank_quote,
-                    output_quote,
-                    volumes.get((output_item, sell_city)),
-                    quotes,
-                    volumes,
-                    now,
-                )
-                if route is not None:
-                    candidates.append(route)
+        route = _build_route(
+            params,
+            wood_item=wood_item,
+            plank_input_item=plank_input_item,
+            output_quote=output_quote,
+            volume=volumes.get((output_item, sell_city)),
+            quotes=quotes,
+            volumes=volumes,
+            now=now,
+        )
+        if route is not None:
+            candidates.append(route)
 
     # V2.8.1 : on garde toujours les top_n meilleures routes par ROI, meme si
     # elles ne passent pas le seuil. Le seuil devient purement informationnel

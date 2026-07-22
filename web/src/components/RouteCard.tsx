@@ -215,46 +215,107 @@ interface SourcingRowProps {
 }
 
 const SourcingRow: FC<SourcingRowProps> = ({ leg, icon, label }) => {
-  const slippage = leg.slippage_pct ?? 0
-  const hasInflation = slippage > 0.1 // ignore l'arrondi
-  const slippageTone =
-    slippage >= 15 ? 'text-negative' : slippage >= 8 ? 'text-caution' : 'text-ink-muted'
-  const slippageTooltip = hasInflation
-    ? `Ref AODP ${leg.prix_ref?.toFixed(0)} s → prix effectif estimé ${leg.prix_unitaire.toFixed(0)} s (+${slippage.toFixed(1)}%). ` +
-      `Profondeur : +${(leg.slippage_qty_pct ?? 0).toFixed(1)}% · Fraîcheur : +${(leg.slippage_age_pct ?? 0).toFixed(1)}%.`
-    : undefined
+  const allocations = leg.allocations ?? []
+  const isMulti = allocations.length > 1
+  const avgSlippage = leg.slippage_pct ?? 0
+  const legSlippageTone =
+    avgSlippage >= 15 ? 'text-negative' : avgSlippage >= 8 ? 'text-caution' : 'text-ink-muted'
 
   return (
     <div className="rounded-lg border border-surface-border/60 bg-surface/60 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-semibold text-ink">
           {icon}
-          {label}
+          <span>{label}</span>
+          <span className="text-xs font-normal text-ink-muted">— {leg.quantite} unités</span>
         </div>
-        <FreshnessBadge level={leg.freshness} ageHours={leg.data_age_hours} compact />
-      </div>
-      <div className="flex items-baseline justify-between gap-3 text-xs">
-        <span className="text-ink-muted">
-          {leg.city} —{' '}
-          <span className="num text-ink" title={slippageTooltip}>
-            {leg.prix_unitaire.toFixed(0)} s
-          </span>
-          {hasInflation && (
-            <>
-              {' '}
-              <span
-                className={cn('num text-[10px] font-semibold', slippageTone)}
-                title={slippageTooltip}
-              >
-                +{slippage.toFixed(1)}%
-              </span>
-            </>
+        <div className="flex items-center gap-2">
+          {isMulti && (
+            <span
+              className="inline-flex items-center gap-1 rounded-md border border-primary-500/40 bg-primary-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary-300"
+              title={`Split réparti sur ${allocations.length} villes pour éviter la saturation du carnet`}
+            >
+              {allocations.length} villes
+            </span>
           )}
-          {' '}× <span className="num text-ink">{leg.quantite}</span>
-        </span>
-        <span className="num text-sm font-semibold text-ink">{fmtSilver(leg.cout_total)}</span>
+          <FreshnessBadge level={leg.freshness} ageHours={leg.data_age_hours} compact />
+        </div>
       </div>
+
+      {/* Allocations verticales : 1 ligne par ville visitee */}
+      <ul className="space-y-1 text-xs">
+        {allocations.map((alloc) => (
+          <AllocationRow key={alloc.city} alloc={alloc} isMulti={isMulti} />
+        ))}
+      </ul>
+
+      {/* Bandeau resume : moyenne + total */}
+      {isMulti && (
+        <div className="mt-2 flex items-baseline justify-between gap-3 border-t border-surface-border/60 pt-2 text-xs">
+          <span className="text-ink-muted">
+            moyenne <span className="num text-ink">{leg.prix_unitaire.toFixed(0)} s/u</span>
+            {avgSlippage > 0.1 && (
+              <>
+                {' '}
+                <span className={cn('num text-[10px]', legSlippageTone)}>
+                  (+{avgSlippage.toFixed(1)}%)
+                </span>
+              </>
+            )}
+          </span>
+          <span className="num text-sm font-semibold text-ink">{fmtSilver(leg.cout_total)}</span>
+        </div>
+      )}
+      {!isMulti && (
+        <div className="mt-1 flex items-baseline justify-end text-xs">
+          <span className="num text-sm font-semibold text-ink">{fmtSilver(leg.cout_total)}</span>
+        </div>
+      )}
     </div>
+  )
+}
+
+interface AllocationRowProps {
+  alloc: import('../types/optimizer').SourcingAllocation
+  isMulti: boolean
+}
+
+const AllocationRow: FC<AllocationRowProps> = ({ alloc, isMulti }) => {
+  const hasInflation = alloc.slippage_pct > 0.1
+  const tone =
+    alloc.slippage_pct >= 15
+      ? 'text-negative'
+      : alloc.slippage_pct >= 8
+        ? 'text-caution'
+        : 'text-ink-muted'
+  const tooltip = hasInflation
+    ? `Prix ref AODP ${alloc.prix_ref.toFixed(0)} s → effectif ${alloc.prix_unitaire.toFixed(0)} s (+${alloc.slippage_pct.toFixed(1)}%). ` +
+      `Profondeur : +${alloc.slippage_qty_pct.toFixed(1)}% · Fraîcheur : +${alloc.slippage_age_pct.toFixed(1)}%.`
+    : undefined
+
+  return (
+    <li className="flex items-baseline justify-between gap-3">
+      <span className="text-ink-muted">
+        {isMulti && <span className="text-ink-faint">└─ </span>}
+        {alloc.city} —{' '}
+        <span className="num text-ink" title={tooltip}>
+          {alloc.prix_unitaire.toFixed(0)} s
+        </span>
+        {hasInflation && (
+          <>
+            {' '}
+            <span
+              className={cn('num text-[10px] font-semibold', tone)}
+              title={tooltip}
+            >
+              +{alloc.slippage_pct.toFixed(1)}%
+            </span>
+          </>
+        )}{' '}
+        × <span className="num text-ink">{alloc.quantite}</span>
+      </span>
+      <span className="num text-ink">{fmtSilver(alloc.cout_total)}</span>
+    </li>
   )
 }
 

@@ -290,6 +290,35 @@ const HowItWorksModal: FC<Props> = ({ open, onClose }) => {
               </Section>
 
               <Section
+                icon={<Layers className="h-4 w-4" />}
+                title="Sourcing multi-villes — pourquoi tu vois parfois 2 ou 3 villes"
+              >
+                <p>
+                  Pour un gros achat (par ex. 6000 unités de bois), racler le carnet
+                  d'une seule ville te coûte cher en slippage : les 100 premières unités
+                  sont au top price, les 5900 suivantes sont beaucoup plus hautes.
+                </p>
+                <p className="mt-2">
+                  L'outil répartit donc automatiquement l'achat sur plusieurs villes
+                  (jusqu'à 3 par défaut), en commençant par la moins chère, et en
+                  changeant de ville quand le coût marginal d'y ajouter des unités
+                  devient supérieur à celui d'ouvrir une nouvelle allocation ailleurs.
+                </p>
+                <Callout tone="info">
+                  <strong>Sanity check :</strong> plus de villes = plus de temps de
+                  transport et de risque PvP entre villes en jeu. Si tu préfères une
+                  seule ville, tu peux forcer <span className="num">--max-source-cities=1</span>
+                  côté CLI (le frontend expose ce contrôle bientôt).
+                </Callout>
+                <p className="mt-3 text-ink-muted">
+                  Quand une jambe d'achat est splittée, tu vois "2 villes" ou "3 villes"
+                  dans un petit badge, et la ligne se déplie verticalement avec la
+                  quantité et le prix par ville. Le total affiché est la somme, avec la
+                  moyenne pondérée en dessous.
+                </p>
+              </Section>
+
+              <Section
                 icon={<AlertTriangle className="h-4 w-4" />}
                 title="Slippage — pourquoi le prix d'achat affiché est plus haut que l'AODP"
               >

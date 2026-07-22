@@ -86,6 +86,8 @@ def _build_params(
     exclude_achat: list[str],
     resource: ResourceKind,
     enchant: int,
+    max_source_cities: int,
+    saturation_per_city: float,
 ) -> OptimizerParams:
     """Assemble et valide les paramètres d'optimisation selon le mode choisi."""
     if mode is QuantityMode.CAPITAL and not capital:
@@ -117,6 +119,8 @@ def _build_params(
         excluded_sell_cities=list(config.DEFAULTS["excluded_sell_cities"]) + exclude_vente,
         resource=resource,
         enchant=enchant,
+        max_source_cities=max_source_cities,
+        saturation_per_city=saturation_per_city,
     )
 
 
@@ -183,6 +187,31 @@ def optimize(
             max=4,
         ),
     ] = 0,
+    max_source_cities: Annotated[
+        int,
+        typer.Option(
+            "--max-source-cities",
+            help=(
+                "Nombre max de villes visitées pour un même input (bois ou plank T-1). "
+                "1 = mono-source (comportement V2.8), 3 = compromis réaliste (défaut), "
+                "6 = pas de cap. Contrepartie : plus de villes = plus de transport en jeu."
+            ),
+            min=1,
+            max=6,
+        ),
+    ] = 3,
+    saturation_per_city: Annotated[
+        float,
+        typer.Option(
+            "--saturation-per-city",
+            help=(
+                "Fraction du volume 24h qu'on est prêt à racler dans une ville avant "
+                "de passer à la suivante (défaut 0.25 = 25%%). Au-delà on écrase le carnet."
+            ),
+            min=0.05,
+            max=1.0,
+        ),
+    ] = 0.25,
     exclude_vente: Annotated[
         list[str] | None, typer.Option("--exclude-vente", help="Ville à exclure de la vente.")
     ] = None,
@@ -215,6 +244,8 @@ def optimize(
         exclude_achat=exclude_achat or [],
         resource=resource,
         enchant=enchant,
+        max_source_cities=max_source_cities,
+        saturation_per_city=saturation_per_city,
     )
 
     try:

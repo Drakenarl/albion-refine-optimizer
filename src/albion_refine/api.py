@@ -75,6 +75,8 @@ class OptimizeRequest(BaseModel):
     excluded_sell_cities: list[str] = []
     resource: ResourceKind = ResourceKind.WOOD
     enchant: int = 0
+    max_source_cities: int = 3
+    saturation_per_city: float = 0.25
     top_n: int = 3
     server: str = "europe"
     use_cache: bool = True

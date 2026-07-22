@@ -240,21 +240,48 @@ class SourcingLeg(BaseModel):
     kind: str  # "wood" ou "plank"
     item_id: str
     tier: int
+    # ``city`` = ville principale (celle avec la plus grosse quantite en cas
+    # de split multi-villes V2.9).
     city: str
-    # ``prix_unitaire`` = prix EFFECTIF utilise dans les calculs (deja gonfle du
-    # slippage V2.7 si applicable). ``prix_ref`` est le sell_price_min brut
-    # d'AODP, expose pour l'UI et la transparence.
+    # ``prix_unitaire`` = prix EFFECTIF blend (moyen pondere si multi-source).
+    # ``prix_ref`` = prix ref moyen pondere aussi (pour le tooltip).
     prix_unitaire: float
     prix_ref: float | None = None
-    slippage_pct: float | None = None  # inflation combinee, en %
-    slippage_qty_pct: float | None = None  # composante profondeur seule, en %
-    slippage_age_pct: float | None = None  # composante fraicheur seule, en %
-    quantite: int
-    cout_total: float
+    slippage_pct: float | None = None  # inflation ponderee, en %
+    slippage_qty_pct: float | None = None  # composante profondeur ponderee
+    slippage_age_pct: float | None = None  # composante fraicheur ponderee
+    quantite: int  # quantite totale (somme des allocations)
+    cout_total: float  # cout total (somme des allocations)
     data_age_hours: float | None = None
     freshness: FreshnessLevel = FreshnessLevel.UNKNOWN
     source: SourcingMode = SourcingMode.MARKET
     production: ProductionLeg | None = None
+    # V2.9 : detail des allocations par ville. Liste avec 1 seule entree =
+    # sourcing mono-ville (equivalent V2.8). > 1 entree = split multi-villes.
+    allocations: list[SourcingAllocation] = Field(default_factory=list)
+
+
+class SourcingAllocation(BaseModel):
+    """Sous-allocation d'un achat multi-villes (V2.9).
+
+    Une ``SourcingLeg`` peut contenir plusieurs allocations quand l'algo
+    decide de repartir la quantite demandee sur plusieurs villes pour eviter
+    de saturer un seul carnet. Chaque allocation porte son propre prix (avec
+    slippage recalcule pour la quantite locale) et sa propre fraicheur.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    city: str
+    quantite: int
+    prix_ref: float  # sell_price_min AODP brut de la ville
+    prix_unitaire: float  # prix effectif = prix_ref * (1 + slippage)
+    cout_total: float  # quantite * prix_unitaire
+    slippage_pct: float  # inflation combinee, en %
+    slippage_qty_pct: float  # composante profondeur seule
+    slippage_age_pct: float  # composante fraicheur seule
+    data_age_hours: float | None = None
+    freshness: FreshnessLevel = FreshnessLevel.UNKNOWN
 
 
 class ProductionLeg(BaseModel):

@@ -25,6 +25,19 @@ export type WarningCode =
   | 'BUY_SLIPPAGE_ELEVE'
   | 'MARCHE_INACTIF'
 
+export interface SourcingAllocation {
+  city: string
+  quantite: number
+  prix_ref: number
+  prix_unitaire: number
+  cout_total: number
+  slippage_pct: number
+  slippage_qty_pct: number
+  slippage_age_pct: number
+  data_age_hours: number | null
+  freshness: FreshnessLevel
+}
+
 export interface SourcingLeg {
   kind: 'wood' | 'plank'
   item_id: string
@@ -40,6 +53,7 @@ export interface SourcingLeg {
   data_age_hours: number | null
   freshness: FreshnessLevel
   source: SourcingMode
+  allocations: SourcingAllocation[]
 }
 
 export interface RefiningResult {
