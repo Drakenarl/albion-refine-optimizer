@@ -38,20 +38,30 @@ interface FormState {
   enchant: number
 }
 
+// Valeurs par defaut affichees en gris tant que l'utilisateur n'a pas touche
+// au champ. Des qu'il modifie le contenu, le style repasse en clair.
+const INITIAL_DEFAULTS = {
+  capital: '3000000',
+  stationRate: '50',
+}
+
 const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
   const [state, setState] = useState<FormState>({
     tier: 7,
     mode: 'capital',
-    capital: '3000000',
+    capital: INITIAL_DEFAULTS.capital,
     quantite: '',
     focusAvailable: '',
     focus: true,
-    stationRate: '50',
+    stationRate: INITIAL_DEFAULTS.stationRate,
     seuilMarge: String(config.seuil_marge_default),
     server: 'europe',
     resource: 'wood',
     enchant: 0,
   })
+  // Valeur par defaut du seuil : on la calcule apres le useState pour utiliser
+  // config chargee. C'est un derivee, pas un state.
+  const seuilMargeDefault = String(config.seuil_marge_default)
 
   const currentResource =
     config.resources.find((r) => r.kind === state.resource) ?? config.resources[0]
@@ -59,6 +69,11 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
   const patch = <K extends keyof FormState>(key: K, value: FormState[K]): void => {
     setState((prev) => ({ ...prev, [key]: value }))
   }
+
+  // Un champ est "pristine" tant que sa valeur == la valeur initiale. On grise
+  // le texte dans ce cas pour signaler "c'est un defaut, tu peux modifier".
+  const pristineClass = (isPristine: boolean): string =>
+    isPristine ? 'text-ink-faint' : 'text-ink'
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault()
@@ -165,7 +180,7 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
             type="number"
             value={state.stationRate}
             onChange={(e) => patch('stationRate', e.target.value)}
-            className={inputClass}
+            className={cn(inputClass, pristineClass(state.stationRate === INITIAL_DEFAULTS.stationRate))}
             min={1}
             required
           />
@@ -177,7 +192,7 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
               type="number"
               value={state.capital}
               onChange={(e) => patch('capital', e.target.value)}
-              className={inputClass}
+              className={cn(inputClass, pristineClass(state.capital === INITIAL_DEFAULTS.capital))}
               min={1}
               required
             />
@@ -189,8 +204,9 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
               type="number"
               value={state.quantite}
               onChange={(e) => patch('quantite', e.target.value)}
-              className={inputClass}
+              className={cn(inputClass, 'text-ink')}
               min={1}
+              placeholder="ex. 1000"
               required
             />
           </Field>
@@ -201,8 +217,9 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
               type="number"
               value={state.focusAvailable}
               onChange={(e) => patch('focusAvailable', e.target.value)}
-              className={inputClass}
+              className={cn(inputClass, 'text-ink')}
               min={1}
+              placeholder="ex. 10000"
               required
             />
           </Field>
@@ -221,7 +238,7 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
             type="number"
             value={state.seuilMarge}
             onChange={(e) => patch('seuilMarge', e.target.value)}
-            className={inputClass}
+            className={cn(inputClass, pristineClass(state.seuilMarge === seuilMargeDefault))}
             step={1}
           />
         </Field>
@@ -289,8 +306,8 @@ const Field: FC<FieldProps> = ({ label, hint, children }) => (
 )
 
 const inputClass =
-  'h-10 rounded-lg border border-surface-border bg-surface px-3 text-sm text-ink placeholder:text-ink-faint transition hover:border-slate-500'
-const selectClass = inputClass
+  'h-10 rounded-lg border border-surface-border bg-surface px-3 text-sm placeholder:text-ink-faint transition hover:border-slate-500'
+const selectClass = `${inputClass} text-ink`
 
 function capitalize(s: string): string {
   return s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1)
