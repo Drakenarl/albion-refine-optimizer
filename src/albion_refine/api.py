@@ -75,6 +75,7 @@ class OptimizeRequest(BaseModel):
     excluded_sell_cities: list[str] = []
     recup_mode: RecupMode = RecupMode.WITH_PLANKS
     resource: ResourceKind = ResourceKind.WOOD
+    enchant: int = 0
     top_n: int = 3
     server: str = "europe"
     use_cache: bool = True
@@ -98,6 +99,7 @@ class ConfigResponse(BaseModel):
     seuil_marge_default: float
     servers: list[str]
     resources: list[ResourceOption]
+    enchants: list[int]
 
 
 @app.get("/api/health")
@@ -124,6 +126,7 @@ def get_config() -> ConfigResponse:
             )
             for res in config.RESOURCES.values()
         ],
+        enchants=list(config.SUPPORTED_ENCHANTS),
     )
 
 

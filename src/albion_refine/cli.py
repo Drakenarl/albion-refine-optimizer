@@ -86,6 +86,7 @@ def _build_params(
     exclude_achat: list[str],
     recup_mode: RecupMode,
     resource: ResourceKind,
+    enchant: int,
 ) -> OptimizerParams:
     """Assemble et valide les paramètres d'optimisation selon le mode choisi."""
     if mode is QuantityMode.CAPITAL and not capital:
@@ -94,6 +95,10 @@ def _build_params(
         raise typer.BadParameter("Le mode fixed exige --quantite.")
     if mode is QuantityMode.FOCUS and not focus_available:
         raise typer.BadParameter("Le mode focus exige --focus-available.")
+    if enchant not in config.SUPPORTED_ENCHANTS:
+        raise typer.BadParameter(
+            f"Enchant {enchant} non supporte. Valides : {list(config.SUPPORTED_ENCHANTS)}."
+        )
 
     # En mode focus, le focus est nécessairement activé.
     effective_focus = focus or mode is QuantityMode.FOCUS
@@ -113,6 +118,7 @@ def _build_params(
         excluded_sell_cities=list(config.DEFAULTS["excluded_sell_cities"]) + exclude_vente,
         recup_mode=recup_mode,
         resource=resource,
+        enchant=enchant,
     )
 
 
@@ -177,6 +183,19 @@ def optimize(
             ),
         ),
     ] = ResourceKind.WOOD,
+    enchant: Annotated[
+        int,
+        typer.Option(
+            "--enchant",
+            help=(
+                "Niveau d'enchantement (0 = base, 1..4 = .1 -> .4). "
+                "L'enchant modifie l'item AODP requeté (T7_WOOD_LEVEL1@1 par ex.) "
+                "mais laisse la recette et la logique métier inchangées."
+            ),
+            min=0,
+            max=4,
+        ),
+    ] = 0,
     exclude_vente: Annotated[
         list[str] | None, typer.Option("--exclude-vente", help="Ville à exclure de la vente.")
     ] = None,
@@ -209,6 +228,7 @@ def optimize(
         exclude_achat=exclude_achat or [],
         recup_mode=recup_mode,
         resource=resource,
+        enchant=enchant,
     )
 
     try:

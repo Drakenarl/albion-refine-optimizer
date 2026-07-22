@@ -81,6 +81,11 @@ class OptimizerParams(BaseModel):
     # Filiere raffinee : bois (Fort Sterling) ou peau (Martlock). Ajoute en
     # V2.2 pour supporter plusieurs matieres sans changer la logique metier.
     resource: ResourceKind = ResourceKind.WOOD
+    # Niveau d'enchantement (V2.3). 0 = base, 1..4 = .1 -> .4. La logique metier
+    # est identique, seuls les item IDs demandes a l'AODP changent (suffixe
+    # ``_LEVELn@n``). La recette (qte de matiere + qte de raffine T-1) reste
+    # celle du tier.
+    enchant: int = Field(default=0, ge=0, le=4)
     top_n: int = 3
 
     def buy_cities(self) -> list[str]:
@@ -425,6 +430,7 @@ def _build_route(
     return Route(
         tier=tier,
         resource_kind=params.resource,
+        enchant=params.enchant,
         quantite=quantity,
         achat_wood=wood_leg,
         achat_plank=plank_leg,
@@ -513,7 +519,13 @@ def _build_checklist(
                     f"critique, prix du {res.display_refined} T-1",
                 )
             )
-        pairs.append((res.refined_item_id(route.tier), route.vente.ville, "vente principale"))
+        pairs.append(
+            (
+                res.refined_item_id(route.tier, route.enchant),
+                route.vente.ville,
+                "vente principale",
+            )
+        )
         for item_id, city, role in pairs:
             if (item_id, city) in seen:
                 continue
@@ -570,11 +582,15 @@ def _discarded_top(
     return [_discarded_report(route, params) for route in ordered[:n]]
 
 
-def _plank_input_item(tier: int, res: Resource) -> str | None:
-    """Retourne l'item ID du raffine T-1 requis par la recette, ou ``None`` (T2)."""
+def _plank_input_item(tier: int, res: Resource, enchant: int = 0) -> str | None:
+    """Retourne l'item ID du raffine T-1 requis par la recette, ou ``None`` (T2).
+
+    Le T-1 herite du meme enchant que le tier produit : un T7 .2 plank consomme
+    du T6 .2 plank, pas du T6 base.
+    """
     if config.lower_plank_qty_per_plank(tier) == 0:
         return None
-    return res.refined_item_id(tier - 1)
+    return res.refined_item_id(tier - 1, enchant)
 
 
 def _plank_input_candidates(
@@ -632,9 +648,9 @@ def optimize(
     volumes = _index_volumes(volumes_list)
 
     res = params.resource_config()
-    wood_item = res.raw_item_id(params.tier)
-    plank_input_item = _plank_input_item(params.tier, res)
-    output_item = res.refined_item_id(params.tier)
+    wood_item = res.raw_item_id(params.tier, params.enchant)
+    plank_input_item = _plank_input_item(params.tier, res, params.enchant)
+    output_item = res.refined_item_id(params.tier, params.enchant)
 
     candidates: list[Route] = []
     for wood_city in params.buy_cities():
@@ -718,9 +734,9 @@ async def run_optimization(
     # AODP fournit des timestamps UTC naïfs : on aligne notre référence dessus.
     reference = now or datetime.now(tz=UTC).replace(tzinfo=None)
     res = params.resource_config()
-    wood_item = res.raw_item_id(params.tier)
-    plank_input_item = _plank_input_item(params.tier, res)
-    output_item = res.refined_item_id(params.tier)
+    wood_item = res.raw_item_id(params.tier, params.enchant)
+    plank_input_item = _plank_input_item(params.tier, res, params.enchant)
+    output_item = res.refined_item_id(params.tier, params.enchant)
 
     items = [item for item in (wood_item, plank_input_item, output_item) if item is not None]
     all_buy = sorted(set(params.buy_cities()) | set(params.sell_cities()))

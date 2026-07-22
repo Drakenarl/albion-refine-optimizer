@@ -55,7 +55,13 @@ const RouteCard: FC<Props> = ({ route }) => {
               TOP {route.rank}
             </span>
             <span className="text-sm text-ink-muted">
-              Tier {route.tier} — {route.quantite} {labels.refined}s
+              Tier {route.tier}
+              {route.enchant > 0 && (
+                <span className="ml-1 rounded bg-primary-500/15 px-1.5 py-0.5 text-[10px] font-bold text-primary-300">
+                  .{route.enchant}
+                </span>
+              )}
+              {' '}— {route.quantite} {labels.refined}s
             </span>
           </div>
           <div className={cn('flex items-center gap-2 text-sm font-semibold', roiTone)}>

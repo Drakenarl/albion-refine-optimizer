@@ -27,6 +27,22 @@ MIN_TIER: Final = 4
 MAX_TIER: Final = 8
 SUPPORTED_TIERS: Final = tuple(range(MIN_TIER, MAX_TIER + 1))
 
+# Enchantements (V2.3) : .0 = base, .1 -> .4 = variantes enchantees. AODP encode
+# ces variantes en suffixant l'item id : "T7_WOOD_LEVEL1@1" pour .1 par exemple.
+# Meme recette de raffinage (quantites identiques), seule change la matiere : un
+# T7 .1 plank consomme du T7 .1 WOOD + du T6 .1 PLANKS. La logique metier ne
+# change pas, seuls les item IDs demandes a l'AODP sont differents.
+MIN_ENCHANT: Final = 0
+MAX_ENCHANT: Final = 4
+SUPPORTED_ENCHANTS: Final = tuple(range(MIN_ENCHANT, MAX_ENCHANT + 1))
+
+
+def _enchant_suffix(enchant: int) -> str:
+    """Retourne le suffixe AODP pour un niveau d'enchant (``""`` pour .0)."""
+    if enchant <= 0:
+        return ""
+    return f"_LEVEL{enchant}@{enchant}"
+
 # ---------------------------------------------------------------------------
 # Ressources supportees (voir SPEC section 6.1 + extension V2.2 pour la peau)
 # ---------------------------------------------------------------------------
@@ -48,13 +64,19 @@ class Resource:
     display_raw: str  # libelle FR de la matiere premiere (ex "bois")
     display_refined: str  # libelle FR du raffine (ex "plank")
 
-    def raw_item_id(self, tier: int) -> str:
-        """Item ID AODP de la matiere premiere pour ``tier`` (ex ``T5_WOOD``)."""
-        return f"T{tier}_{self.raw_prefix}"
+    def raw_item_id(self, tier: int, enchant: int = 0) -> str:
+        """Item ID AODP de la matiere premiere pour ``tier`` et ``enchant``.
 
-    def refined_item_id(self, tier: int) -> str:
-        """Item ID AODP du raffine pour ``tier`` (ex ``T5_PLANKS``)."""
-        return f"T{tier}_{self.refined_prefix}"
+        Ex : ``T5_WOOD`` (base) ou ``T5_WOOD_LEVEL2@2`` (enchant .2).
+        """
+        return f"T{tier}_{self.raw_prefix}{_enchant_suffix(enchant)}"
+
+    def refined_item_id(self, tier: int, enchant: int = 0) -> str:
+        """Item ID AODP du raffine pour ``tier`` et ``enchant``.
+
+        Ex : ``T5_PLANKS`` (base) ou ``T5_PLANKS_LEVEL2@2`` (enchant .2).
+        """
+        return f"T{tier}_{self.refined_prefix}{_enchant_suffix(enchant)}"
 
 
 RESOURCES: Final[dict[ResourceKind, Resource]] = {

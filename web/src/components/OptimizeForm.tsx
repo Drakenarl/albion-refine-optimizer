@@ -29,6 +29,7 @@ interface FormState {
   recupMode: RecupMode
   server: string
   resource: ResourceKind
+  enchant: number
 }
 
 const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
@@ -44,6 +45,7 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
     recupMode: 'with-planks',
     server: 'europe',
     resource: 'wood',
+    enchant: 0,
   })
 
   const currentResource =
@@ -64,6 +66,7 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
       recup_mode: state.recupMode,
       server: state.server,
       resource: state.resource,
+      enchant: state.enchant,
     }
     if (state.mode === 'capital') payload.capital = Number(state.capital)
     if (state.mode === 'fixed') payload.quantite = Number(state.quantite)
@@ -93,6 +96,28 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
             {config.resources.map((r) => (
               <option key={r.kind} value={r.kind}>
                 {capitalize(r.display_raw)} → {r.display_refined}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field
+          label={
+            <span className="inline-flex items-center gap-1">
+              Enchantement
+              <InfoTooltip>{GLOSSARY.enchant}</InfoTooltip>
+            </span>
+          }
+          hint={state.enchant === 0 ? undefined : 'Marché moins liquide, marges souvent meilleures'}
+        >
+          <select
+            value={state.enchant}
+            onChange={(e) => patch('enchant', Number(e.target.value))}
+            className={selectClass}
+          >
+            {(config.enchants ?? [0, 1, 2, 3, 4]).map((n) => (
+              <option key={n} value={n}>
+                {n === 0 ? '.0 (base)' : `.${n}`}
               </option>
             ))}
           </select>

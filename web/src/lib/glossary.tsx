@@ -153,6 +153,26 @@ export const GLOSSARY: Record<string, ReactNode> = {
     </>
   ),
 
+  enchant: (
+    <>
+      <p>
+        <strong>Niveau d'enchantement de la matière (.0 à .4).</strong>
+      </p>
+      <p className="mt-1.5 text-ink-muted">
+        .0 = base, .1 à .4 = variantes enchantées. La recette et les formules
+        de raffinage sont identiques ; seuls les item IDs AODP changent
+        (T7_WOOD_LEVEL1@1 par ex.). Un T7 .2 plank consomme du T7 .2 wood et
+        du T6 .2 planks — jamais du base.
+      </p>
+      <p className="mt-1.5 text-ink-muted">
+        En pratique : peu de refineurs touchent aux enchants (barrière capital
+        + focus), donc le marché est moins saturé et les marges peuvent être
+        bien meilleures qu'en base. Contrepartie : volumes 24h plus faibles,
+        risque de fill sur sell order plus élevé.
+      </p>
+    </>
+  ),
+
   station_rate: (
     <>
       <p>

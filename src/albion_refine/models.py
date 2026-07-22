@@ -284,6 +284,8 @@ class Route(BaseModel):
     quantite: int
     # Filiere raffinee (V2.2). Defaut wood pour retrocompat V1/V2.0/V2.1.
     resource_kind: ResourceKind = ResourceKind.WOOD
+    # Enchantement (V2.3). 0 = base, 1-4 = variantes .1 -> .4.
+    enchant: int = 0
     achat_wood: SourcingLeg
     # ``None`` quand la recette ne consomme pas de plank T-1 (cas du T2).
     achat_plank: SourcingLeg | None = None

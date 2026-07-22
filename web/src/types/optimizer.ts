@@ -80,6 +80,7 @@ export interface Route {
   rank: number
   tier: number
   resource_kind: ResourceKind
+  enchant: number
   quantite: number
   achat_wood: SourcingLeg
   achat_plank: SourcingLeg | null
@@ -153,6 +154,7 @@ export interface OptimizeRequest {
   excluded_sell_cities?: string[]
   recup_mode?: RecupMode
   resource?: ResourceKind
+  enchant?: number
   top_n?: number
   server?: string
   use_cache?: boolean
@@ -165,4 +167,5 @@ export interface ConfigResponse {
   seuil_marge_default: number
   servers: string[]
   resources: ResourceOption[]
+  enchants: number[]
 }

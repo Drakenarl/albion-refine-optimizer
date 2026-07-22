@@ -292,13 +292,14 @@ def _route_panel(route: Route) -> Panel:
     )
 
     signe = "+" if route.benefice >= 0 else ""
+    ench_tag = f" .{route.enchant}" if route.enchant > 0 else ""
     title = (
         f"TOP {route.rank} — Capital {fmt_silver(route.cout_total)} → "
         f"Bénéfice {signe}{fmt_silver(route.benefice)} (ROI {signe}{route.marge_pct:.1f}%)"
     )
     if route.marge_pct_b is not None:
         title += f" | potentiel SO {route.marge_pct_b:+.1f}%"
-    subtitle = f"TIER {route.tier} {refined_upper} — {route.quantite} unités"
+    subtitle = f"TIER {route.tier}{ench_tag} {refined_upper} — {route.quantite} unités"
     return Panel(body, title=title, subtitle=subtitle, border_style=_marge_color(route.marge_pct))
 
 
