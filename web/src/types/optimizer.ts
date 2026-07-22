@@ -6,7 +6,6 @@
 export type QuantityMode = 'capital' | 'fixed' | 'focus'
 export type SellStrategy = 'instant_sell' | 'sell_order'
 export type FreshnessLevel = 'fresh' | 'warning' | 'critical' | 'unknown'
-export type RecupMode = 'local' | 'with-planks'
 export type SourcingMode = 'market' | 'production'
 export type ResourceKind = 'wood' | 'hide' | 'fiber' | 'ore' | 'stone'
 
@@ -152,7 +151,6 @@ export interface OptimizeRequest {
   seuil_marge_min_pct?: number
   excluded_buy_cities?: string[]
   excluded_sell_cities?: string[]
-  recup_mode?: RecupMode
   resource?: ResourceKind
   enchant?: number
   top_n?: number

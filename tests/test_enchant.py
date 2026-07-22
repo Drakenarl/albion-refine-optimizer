@@ -20,7 +20,6 @@ from albion_refine.config import Resource
 from albion_refine.models import (
     PriceQuote,
     QuantityMode,
-    RecupMode,
     ResourceKind,
     VolumeData,
 )
@@ -125,7 +124,6 @@ class TestEnchantedPipelineWood:
             seuil_marge_min_pct=-1000,
             resource=ResourceKind.WOOD,
             enchant=1,
-            recup_mode=RecupMode.LOCAL,
         )
         result = optimize(params, quotes, volumes, now)
         assert result.routes, "au moins une route doit exister"
@@ -158,7 +156,6 @@ class TestEnchantedPipelineWood:
             seuil_marge_min_pct=-1000,
             resource=ResourceKind.HIDE,
             enchant=2,
-            recup_mode=RecupMode.LOCAL,
         )
         result = optimize(params, quotes, volumes, now)
         assert result.routes
@@ -192,7 +189,6 @@ class TestNoRegressionOnBase:
             quantite=50,
             station_rate=100,
             seuil_marge_min_pct=-1000,
-            recup_mode=RecupMode.LOCAL,
             # enchant par defaut = 0
         )
         result = optimize(params, quotes, volumes, now)

@@ -17,7 +17,7 @@ from rich.console import Console
 from albion_refine import config, formatters
 from albion_refine.aodp_client import AodpClient, AodpError
 from albion_refine.config import ResourceKind
-from albion_refine.models import QuantityMode, RecupMode
+from albion_refine.models import QuantityMode
 from albion_refine.optimizer import OptimizerParams, run_optimization
 
 
@@ -84,7 +84,6 @@ def _build_params(
     seuil_marge: float,
     exclude_vente: list[str],
     exclude_achat: list[str],
-    recup_mode: RecupMode,
     resource: ResourceKind,
     enchant: int,
 ) -> OptimizerParams:
@@ -116,7 +115,6 @@ def _build_params(
         seuil_marge_min_pct=seuil_marge,
         excluded_buy_cities=list(config.DEFAULTS["excluded_buy_cities"]) + exclude_achat,
         excluded_sell_cities=list(config.DEFAULTS["excluded_sell_cities"]) + exclude_vente,
-        recup_mode=recup_mode,
         resource=resource,
         enchant=enchant,
     )
@@ -161,17 +159,6 @@ def optimize(
             ),
         ),
     ] = float(config.DEFAULTS["seuil_marge_min_pct"]),
-    recup_mode: Annotated[
-        RecupMode,
-        typer.Option(
-            "--recup-mode",
-            help=(
-                "Où vendre la récup RRR. "
-                "'with-planks' (défaut) : dans la ville des raffinés (workflow réaliste). "
-                "'local' : dans la ville spécialité (comportement V1, souvent défavorable)."
-            ),
-        ),
-    ] = RecupMode.WITH_PLANKS,
     resource: Annotated[
         ResourceKind,
         typer.Option(
@@ -226,7 +213,6 @@ def optimize(
         seuil_marge=seuil_marge,
         exclude_vente=exclude_vente or [],
         exclude_achat=exclude_achat or [],
-        recup_mode=recup_mode,
         resource=resource,
         enchant=enchant,
     )

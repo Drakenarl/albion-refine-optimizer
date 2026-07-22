@@ -10,7 +10,6 @@ from albion_refine import optimizer
 from albion_refine.models import (
     PriceQuote,
     QuantityMode,
-    RecupMode,
     SellStrategy,
     VolumeData,
     WarningCode,
@@ -181,23 +180,30 @@ class TestFreshnessWeighting:
 
 
 class TestRecuperationWalk:
-    """La récup RRR passe par le carnet d'achat de Fort Sterling (recup_mode=local)."""
+    """La récup RRR passe par le carnet d'achat de la ville de vente (V2.5).
 
-    def _run(self, volume_fs: float | None) -> optimizer.OptimizationResult:
+    Depuis V2.5, il n'existe plus qu'un seul mode : la récup est vendue dans
+    la même ville que les raffinés finis (workflow réel). L'ancien mode
+    ``local`` était un cas particulier redondant avec l'exploration exhaustive
+    des ``sell_city``.
+    """
+
+    def _run(self, volume_lym: float | None) -> optimizer.OptimizationResult:
         now = datetime(2026, 7, 19, 15, 20, 0)
         when = datetime(2026, 7, 19, 15, 0, 0)
         quotes = [
             _quote("T4_WOOD", "Martlock", sell=100, when=when),
             _quote("T3_PLANKS", "Martlock", sell=200, when=when),
-            _quote("T4_WOOD", "Fort Sterling", sell=120, buy=90, when=when),
-            _quote("T3_PLANKS", "Fort Sterling", sell=220, buy=180, when=when),
+            # Lymhurst = ville de vente = ville de récup depuis V2.5.
+            _quote("T4_WOOD", "Lymhurst", sell=140, buy=90, when=when),
+            _quote("T3_PLANKS", "Lymhurst", sell=250, buy=180, when=when),
             _quote("T4_PLANKS", "Lymhurst", sell=600, buy=500, when=when),
         ]
         volumes = [VolumeData(item_id="T4_PLANKS", city="Lymhurst", total_volume_24h=1000)]
-        if volume_fs is not None:
+        if volume_lym is not None:
             volumes += [
-                VolumeData(item_id="T4_WOOD", city="Fort Sterling", total_volume_24h=volume_fs),
-                VolumeData(item_id="T3_PLANKS", city="Fort Sterling", total_volume_24h=volume_fs),
+                VolumeData(item_id="T4_WOOD", city="Lymhurst", total_volume_24h=volume_lym),
+                VolumeData(item_id="T3_PLANKS", city="Lymhurst", total_volume_24h=volume_lym),
             ]
         params = OptimizerParams(
             tier=4,
@@ -205,84 +211,33 @@ class TestRecuperationWalk:
             quantite=100,
             station_rate=100,
             seuil_marge_min_pct=-1000,
-            recup_mode=RecupMode.LOCAL,
         )
         return optimize(params, quotes, volumes, now)
 
     def test_recovery_credited_when_book_is_deep(self) -> None:
-        route = self._run(volume_fs=10_000).routes[0]
-        # RRR sans focus ≈ 0.367 : 200 bois → 73 retournés, 100 planks → 36.
+        route = self._run(volume_lym=10_000).routes[0]
+        assert route.recup_city == "Lymhurst"
         assert route.recup_wood_absorbe == route.recup_wood_demande
         assert route.recup_wood > 0
         assert route.recup_plank > 0
         assert WarningCode.RECUP_PARTIELLE not in route.warnings
 
     def test_recovery_partial_when_volume_is_thin(self) -> None:
-        route = self._run(volume_fs=10).routes[0]
+        route = self._run(volume_lym=10).routes[0]
         assert route.recup_wood_absorbe == 10
         assert route.recup_wood_absorbe < route.recup_wood_demande
         assert WarningCode.RECUP_PARTIELLE in route.warnings
 
     def test_recovery_zero_without_history(self) -> None:
-        route = self._run(volume_fs=None).routes[0]
+        route = self._run(volume_lym=None).routes[0]
         assert route.recup_totale == 0.0
         assert route.recup_wood_absorbe == 0
 
     def test_recovery_lowers_net_cost(self) -> None:
-        riche = self._run(volume_fs=10_000).routes[0]
-        pauvre = self._run(volume_fs=None).routes[0]
+        riche = self._run(volume_lym=10_000).routes[0]
+        pauvre = self._run(volume_lym=None).routes[0]
         assert riche.cout_net < pauvre.cout_net
         assert riche.marge_pct > pauvre.marge_pct
-
-
-class TestRecupModeWithPlanks:
-    """En mode ``with-planks``, la récup est vendue dans la ville des planks.
-
-    Sur ce fixture, FS n'a pas de carnet acheteur (buy_max=1) sur le bois qu'il
-    a lui-même produit — c'est le cas typique observé en jeu qui rendait la V1
-    faussement déficitaire. Lymhurst, en revanche, achète bois et planks à un
-    prix réel. Le passage au mode ``with-planks`` doit donc faire remonter la
-    récup et améliorer la marge.
-    """
-
-    def _run(self, recup_mode: RecupMode) -> optimizer.OptimizationResult:
-        now = datetime(2026, 7, 19, 15, 20, 0)
-        when = datetime(2026, 7, 19, 15, 0, 0)
-        quotes = [
-            _quote("T4_WOOD", "Martlock", sell=100, when=when),
-            _quote("T3_PLANKS", "Martlock", sell=200, when=when),
-            # FS : carnet acheteur quasi vide (le cas problématique).
-            _quote("T4_WOOD", "Fort Sterling", sell=120, buy=1, when=when),
-            _quote("T3_PLANKS", "Fort Sterling", sell=220, buy=1, when=when),
-            # Lymhurst : carnet acheteur profond sur bois, planks et output.
-            _quote("T4_WOOD", "Lymhurst", sell=140, buy=95, when=when),
-            _quote("T3_PLANKS", "Lymhurst", sell=250, buy=180, when=when),
-            _quote("T4_PLANKS", "Lymhurst", sell=600, buy=500, when=when),
-        ]
-        volumes = [
-            VolumeData(item_id="T4_PLANKS", city="Lymhurst", total_volume_24h=1000),
-            VolumeData(item_id="T4_WOOD", city="Fort Sterling", total_volume_24h=10_000),
-            VolumeData(item_id="T3_PLANKS", city="Fort Sterling", total_volume_24h=10_000),
-            VolumeData(item_id="T4_WOOD", city="Lymhurst", total_volume_24h=10_000),
-            VolumeData(item_id="T3_PLANKS", city="Lymhurst", total_volume_24h=10_000),
-        ]
-        params = OptimizerParams(
-            tier=4,
-            mode=QuantityMode.FIXED,
-            quantite=100,
-            station_rate=100,
-            seuil_marge_min_pct=-1000,
-            recup_mode=recup_mode,
-        )
-        return optimize(params, quotes, volumes, now)
-
-    def test_with_planks_beats_local_when_fs_book_is_empty(self) -> None:
-        local = self._run(RecupMode.LOCAL).routes[0]
-        with_planks = self._run(RecupMode.WITH_PLANKS).routes[0]
-        assert with_planks.recup_totale > local.recup_totale
-        assert with_planks.marge_pct > local.marge_pct
-        assert with_planks.recup_city == "Lymhurst"
-        assert local.recup_city == "Fort Sterling"
 
 
 class TestRecupSaturationWarning:
@@ -307,7 +262,6 @@ class TestRecupSaturationWarning:
             quantite=1000,
             station_rate=100,
             seuil_marge_min_pct=-1000,
-            recup_mode=RecupMode.WITH_PLANKS,
         )
         return optimize(params, quotes, volumes, now)
 

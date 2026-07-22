@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from albion_refine import config
 from albion_refine.aodp_client import AodpError
 from albion_refine.config import ResourceKind
-from albion_refine.models import OptimizationResult, QuantityMode, RecupMode
+from albion_refine.models import OptimizationResult, QuantityMode
 from albion_refine.optimizer import OptimizerParams, run_optimization
 
 # Origines autorisées côté navigateur. En dev on ouvre Vite (5173) ; en prod on
@@ -73,7 +73,6 @@ class OptimizeRequest(BaseModel):
     seuil_marge_min_pct: float = float(config.DEFAULTS["seuil_marge_min_pct"])
     excluded_buy_cities: list[str] = []
     excluded_sell_cities: list[str] = []
-    recup_mode: RecupMode = RecupMode.WITH_PLANKS
     resource: ResourceKind = ResourceKind.WOOD
     enchant: int = 0
     top_n: int = 3

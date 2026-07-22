@@ -26,7 +26,6 @@ from albion_refine.models import (
     OptimizationResult,
     PriceQuote,
     QuantityMode,
-    RecupMode,
     RefreshChecklistItem,
     Route,
     RunMetadata,
@@ -73,11 +72,6 @@ class OptimizerParams(BaseModel):
         default_factory=lambda: list(config.DEFAULTS["excluded_sell_cities"])
     )
     ignore_recup: bool = False
-    # Où la récupération RRR est vendue. ``WITH_PLANKS`` (défaut V2) est
-    # réaliste : tu transportes déjà les planks vers leur ville de vente, tu
-    # emmènes la récup avec. ``LOCAL`` reste possible pour comparaison honnête
-    # avec le comportement V1 (vente forcée à la ville specialite).
-    recup_mode: RecupMode = RecupMode.WITH_PLANKS
     # Filiere raffinee : bois (Fort Sterling) ou peau (Martlock). Ajoute en
     # V2.2 pour supporter plusieurs matieres sans changer la logique metier.
     resource: ResourceKind = ResourceKind.WOOD
@@ -182,8 +176,8 @@ def _recuperation(
     ciblée. Sans historique exploitable, on ne crédite rien plutôt que de
     supposer une profondeur infinie (choix conservateur, SPEC_FIX 5.3).
 
-    En V2, la ville n'est plus figée à Fort Sterling : elle dépend de
-    ``recup_mode`` et est choisie par ``_recup_destination``. L'âge du
+    En V2, la ville n'est plus figée à Fort Sterling : la récup est vendue
+    dans la même ville que les raffinés finis (workflow réaliste). L'âge du
     ``buy_max`` est propagé pour appliquer le facteur de confiance fraîcheur
     (V2.1), sans quoi un carnet vieux de 13h avec un prix élevé gonflerait
     artificiellement la récup et biaiserait le choix de la ville de vente.
@@ -206,13 +200,6 @@ def _recuperation(
     return market.compute_recovery_value(
         retour, book, data_age_hours=market.age_hours(quote.buy_max_age(now))
     )
-
-
-def _recup_destination(params: OptimizerParams, sell_city: str) -> str:
-    """Retourne la ville où la récupération RRR sera valorisée."""
-    if params.recup_mode is RecupMode.LOCAL:
-        return params.resource_config().refining_city
-    return sell_city
 
 
 def _evaluate_sales(
@@ -368,7 +355,11 @@ def _build_route(
     cout_plank = plank_leg.cout_total if plank_leg is not None else 0.0
     cout_total = wood_leg.cout_total + cout_plank + refined.cout_station + cout_focus
 
-    recup_city = _recup_destination(params, output_quote.city)
+    # Depuis V2.5, la recup RRR est toujours vendue dans la meme ville que les
+    # raffines finis (workflow reel du raffineur : un seul deplacement). L'ancien
+    # mode LOCAL, qui la forcait a la ville specialite, etait un cas particulier
+    # de with-planks quand la ville de vente est deja la ville specialite.
+    recup_city = output_quote.city
     recup_wood = _recuperation(
         quotes.get((wood_quote.item_id, recup_city)),
         volumes.get((wood_quote.item_id, recup_city)),

@@ -82,23 +82,6 @@ class WarningCode(StrEnum):
     RECUP_SATURATION = "RECUP_SATURATION"
 
 
-class RecupMode(StrEnum):
-    """Où la récupération RRR est vendue.
-
-    ``LOCAL`` : vente à Fort Sterling (ville de raffinage). Sûr, aucun
-    transport, mais souvent défavorable quand FS n'a pas de carnet acheteur sur
-    le bois qu'il a lui-même produit.
-
-    ``WITH_PLANKS`` : vente dans la même ville que les planks. C'est le
-    workflow réel du raffineur non-premium (un seul déplacement) et le nouveau
-    défaut : la V1 sous-valorisait systématiquement la récup en la
-    contraignant à FS.
-    """
-
-    LOCAL = "local"
-    WITH_PLANKS = "with-planks"
-
-
 # Date sentinelle renvoyée par l'AODP quand aucune donnée n'existe.
 AODP_SENTINEL_YEAR = 1
 
@@ -307,7 +290,7 @@ class Route(BaseModel):
     recup_plank_absorbe: int = 0
     recup_plank_demande: int = 0
     recup_totale: float
-    # Ville où la récupération RRR a été valorisée (dépend de ``recup_mode``).
+    # Ville où la récupération RRR a été valorisée (= ville de vente des raffinés).
     recup_city: str = ""
     cout_total: float
     cout_net: float

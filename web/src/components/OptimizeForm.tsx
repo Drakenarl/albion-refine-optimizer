@@ -7,9 +7,16 @@ import type {
   ConfigResponse,
   OptimizeRequest,
   QuantityMode,
-  RecupMode,
   ResourceKind,
 } from '../types/optimizer'
+
+// Serveurs supportes cote outil. Seul Europe est ope pour le moment ; les
+// autres restent affiches mais grises pour signaler la roadmap.
+const SERVER_STATUS: Record<string, { label: string; available: boolean }> = {
+  europe: { label: 'Europe', available: true },
+  west: { label: 'Amérique (bientôt)', available: false },
+  east: { label: 'Asie (bientôt)', available: false },
+}
 
 interface Props {
   config: ConfigResponse
@@ -26,7 +33,6 @@ interface FormState {
   focus: boolean
   stationRate: string
   seuilMarge: string
-  recupMode: RecupMode
   server: string
   resource: ResourceKind
   enchant: number
@@ -42,7 +48,6 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
     focus: true,
     stationRate: '50',
     seuilMarge: String(config.seuil_marge_default),
-    recupMode: 'with-planks',
     server: 'europe',
     resource: 'wood',
     enchant: 0,
@@ -63,7 +68,6 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
       station_rate: Number(state.stationRate),
       focus: state.focus,
       seuil_marge_min_pct: Number(state.seuilMarge),
-      recup_mode: state.recupMode,
       server: state.server,
       resource: state.resource,
       enchant: state.enchant,
@@ -222,37 +226,20 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
           />
         </Field>
 
-        <Field
-          label={
-            <span className="inline-flex items-center gap-1">
-              Mode récup RRR
-              <InfoTooltip width="lg">{GLOSSARY.mode_recup}</InfoTooltip>
-            </span>
-          }
-        >
-          <select
-            value={state.recupMode}
-            onChange={(e) => patch('recupMode', e.target.value as RecupMode)}
-            className={selectClass}
-          >
-            <option value="with-planks">with-planks (recommandé)</option>
-            <option value="local">
-              local (vente forcée à {currentResource?.refining_city ?? 'la ville de raffinage'})
-            </option>
-          </select>
-        </Field>
-
         <Field label="Serveur AODP">
           <select
             value={state.server}
             onChange={(e) => patch('server', e.target.value)}
             className={selectClass}
           >
-            {config.servers.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
+            {config.servers.map((s) => {
+              const meta = SERVER_STATUS[s] ?? { label: s, available: true }
+              return (
+                <option key={s} value={s} disabled={!meta.available}>
+                  {meta.label}
+                </option>
+              )
+            })}
           </select>
         </Field>
 

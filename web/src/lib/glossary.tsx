@@ -136,23 +136,6 @@ export const GLOSSARY: Record<string, ReactNode> = {
     </>
   ),
 
-  mode_recup: (
-    <>
-      <p>
-        <strong>Où la récup RRR est-elle valorisée ?</strong>
-      </p>
-      <p className="mt-1.5 text-ink-muted">
-        <strong>with-planks</strong> (recommandé) : la récup est vendue à la
-        ville où tu vends tes planks/cuirs. Elle voyage avec le stock produit.
-      </p>
-      <p className="mt-1.5 text-ink-muted">
-        <strong>local</strong> : la récup est vendue à la ville de raffinage
-        (Fort Sterling pour bois, Martlock pour peau). Choix conservateur si tu
-        ne veux pas la déplacer.
-      </p>
-    </>
-  ),
-
   enchant: (
     <>
       <p>

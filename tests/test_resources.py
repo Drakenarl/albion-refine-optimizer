@@ -15,7 +15,6 @@ from albion_refine import config, optimizer
 from albion_refine.models import (
     PriceQuote,
     QuantityMode,
-    RecupMode,
     ResourceKind,
     VolumeData,
 )
@@ -113,7 +112,6 @@ class TestHidePipeline:
             station_rate=100,
             seuil_marge_min_pct=-1000,
             resource=ResourceKind.HIDE,
-            recup_mode=RecupMode.LOCAL,
         )
         return optimize(params, quotes, volumes, now)
 
@@ -124,10 +122,11 @@ class TestHidePipeline:
         assert route.achat_plank is not None
         assert route.achat_plank.item_id == "T3_LEATHER"
 
-    def test_hide_recup_local_targets_martlock(self) -> None:
+    def test_hide_recup_follows_sell_city(self) -> None:
         route = self._run().routes[0]
-        # RecupMode.LOCAL doit valoriser au carnet Martlock (ville specialite peau).
-        assert route.recup_city == "Martlock"
+        # Depuis V2.5, la recup est toujours vendue dans la ville des raffines.
+        # Sur ce fixture, T4_LEATHER n'est vendu qu'a Lymhurst.
+        assert route.recup_city == "Lymhurst"
 
 
 class TestWoodStillWorks:
@@ -153,7 +152,6 @@ class TestWoodStillWorks:
             quantite=100,
             station_rate=100,
             seuil_marge_min_pct=-1000,
-            recup_mode=RecupMode.LOCAL,
             # resource par defaut = WOOD
         )
         return optimize(params, quotes, volumes, now)
@@ -164,4 +162,5 @@ class TestWoodStillWorks:
         assert route.achat_wood.item_id == "T4_WOOD"
         assert route.achat_plank is not None
         assert route.achat_plank.item_id == "T3_PLANKS"
-        assert route.recup_city == "Fort Sterling"
+        # Sur ce fixture, T4_PLANKS n'est vendu qu'a Lymhurst.
+        assert route.recup_city == "Lymhurst"
