@@ -337,7 +337,10 @@ DEFAULTS: Final[dict[str, Any]] = {
     "seuil_fill_probability_pct": 20,
     "freshness_warning_hours": 3,  # jaune
     "freshness_critical_hours": 6,  # rouge, exclu par défaut
-    "cache_ttl_minutes": 15,
+    # 5 min (etait 15 en V1) : AODP recoit des updates constamment ; garder trop
+    # longtemps un ancien snapshot fait louper les rafraichissements provoques
+    # par l'utilisateur (ou d'autres joueurs) qui viennent d'ouvrir un carnet.
+    "cache_ttl_minutes": 5,
     "sell_order_undercut_pct": 1,  # sous-cote 1% pour scénario B
     "premium": False,
     "server": "europe",

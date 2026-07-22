@@ -168,8 +168,9 @@ class TestFreshnessWeighting:
         vieux = self._run(age_vente_heures=3.1).routes[0]
         scenario = vieux.vente.scenario_a_instant_sell
         assert scenario is not None
-        assert scenario.freshness_factor == pytest.approx(0.85)
-        assert vieux.revenu_effectif == pytest.approx(frais.revenu_effectif * 0.85)
+        # V2.6 : bareme durci, 3.1h tombe dans le palier 2-4h -> 0.70.
+        assert scenario.freshness_factor == pytest.approx(0.70)
+        assert vieux.revenu_effectif == pytest.approx(frais.revenu_effectif * 0.70)
         assert vieux.marge_pct < frais.marge_pct
 
     def test_purchase_cost_is_not_weighted(self) -> None:

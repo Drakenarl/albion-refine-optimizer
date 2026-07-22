@@ -1,7 +1,7 @@
 import { useEffect, useState, type FC } from 'react'
 import { AxiosError } from 'axios'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AlertTriangle, HelpCircle, Loader2, PackageSearch } from 'lucide-react'
+import { AlertTriangle, HelpCircle, Loader2, PackageSearch, RefreshCw } from 'lucide-react'
 
 import AlternativesList from './components/AlternativesList'
 import ChecklistPanel from './components/ChecklistPanel'
@@ -43,6 +43,14 @@ const App: FC = () => {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Re-lance la derniere requete en forcant le refresh du cache AODP cote back.
+  // Utile quand l'utilisateur vient d'ouvrir un carnet en jeu (avec le client
+  // AODP actif) et veut que les nouveaux prix remontent immediatement.
+  const handleRefresh = async (): Promise<void> => {
+    if (!lastPayload) return
+    await handleOptimize({ ...lastPayload, use_cache: false })
   }
 
   const seuil = lastPayload?.seuil_marge_min_pct ?? config?.seuil_marge_default ?? 0
@@ -115,7 +123,7 @@ const App: FC = () => {
                   exit="hidden"
                   className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"
                 >
-                  <ResultSection result={result} seuil={seuil} />
+                  <ResultSection result={result} seuil={seuil} onRefresh={handleRefresh} />
                   <ChecklistPanel checklist={result.refresh_checklist} />
                 </motion.div>
               )}
@@ -136,9 +144,10 @@ const App: FC = () => {
 interface ResultProps {
   result: OptimizationResult
   seuil: number
+  onRefresh: () => void
 }
 
-const ResultSection: FC<ResultProps> = ({ result, seuil }) => {
+const ResultSection: FC<ResultProps> = ({ result, seuil, onRefresh }) => {
   const { routes, discarded_top } = result
   const hasRoutes = routes.length > 0
   const profitable = routes.filter((r) => r.marge_pct > 0).length
@@ -158,18 +167,29 @@ const ResultSection: FC<ResultProps> = ({ result, seuil }) => {
 
   return (
     <section className="space-y-6">
-      <header className="flex items-baseline gap-3">
-        <PackageSearch className="h-5 w-5 text-primary-400" />
-        <div>
-          <h2 className="text-lg font-semibold">{heading}</h2>
-          <p className="text-xs text-ink-muted">
-            Tier {result.run_metadata.tier} — analysees a{' '}
-            {new Date(result.run_metadata.timestamp).toLocaleTimeString('fr-FR', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </p>
+      <header className="flex items-start justify-between gap-3">
+        <div className="flex items-baseline gap-3">
+          <PackageSearch className="h-5 w-5 text-primary-400" />
+          <div>
+            <h2 className="text-lg font-semibold">{heading}</h2>
+            <p className="text-xs text-ink-muted">
+              Tier {result.run_metadata.tier} — analysees a{' '}
+              {new Date(result.run_metadata.timestamp).toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </p>
+          </div>
         </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface-raised px-2.5 py-1.5 text-xs text-ink-muted transition hover:border-primary-500/50 hover:bg-primary-500/5 hover:text-ink"
+          title="Force un rafraichissement AODP en ignorant le cache local (5 min)"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          Rafraîchir
+        </button>
       </header>
 
       {allLosing && (

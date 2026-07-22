@@ -233,29 +233,59 @@ const HowItWorksModal: FC<Props> = ({ open, onClose }) => {
                 </p>
               </Section>
 
-              <Section icon={<Timer className="h-4 w-4" />} title="Freshness — pourquoi certaines routes sont grisées">
+              <Section icon={<Timer className="h-4 w-4" />} title="Freshness — la data AODP et son gros piège">
                 <p>
-                  Les prix AODP viennent des joueurs qui ouvrent leur panneau marché en jeu. Un
-                  prix vieux de 6h est moins fiable qu'un prix de 15 min.
+                  Les prix AODP viennent de joueurs qui{' '}
+                  <strong>ont le client AODP installé et ouvrent leur panneau marché</strong>{' '}
+                  en jeu. Sans le client, ouvrir le marché ne partage rien.
                 </p>
-                <div className="mt-3 space-y-1.5 text-xs text-ink-muted">
+                <Callout tone="hint">
+                  <strong>Le vrai levier :</strong> installe le client AODP depuis{' '}
+                  <span className="num">albion-online-data.com</span>, garde-le ouvert quand tu
+                  joues, et pense à ouvrir les carnets de tes villes cibles avant de lancer
+                  une analyse. C'est TA propre navigation qui alimente l'outil.
+                </Callout>
+                <p className="mt-3">Barème de confiance appliqué au revenu selon l'âge :</p>
+                <div className="mt-2 space-y-1.5 text-xs text-ink-muted">
                   <p>
-                    <span className="text-fresh">●</span> <strong>Frais (&lt; 3h)</strong> —
-                    facteur de confiance ~1.0, revenu utilisé tel quel.
+                    <span className="text-fresh">●</span> <strong>&lt; 30 min</strong> — facteur
+                    1.00, aucune décote.
                   </p>
                   <p>
-                    <span className="text-caution">●</span>{' '}
-                    <strong>Attention (3-6h)</strong> — facteur ~0.85, revenu décôté.
+                    <span className="text-fresh">●</span> <strong>30 min - 1h</strong> — facteur
+                    0.95.
                   </p>
                   <p>
-                    <span className="text-critical">●</span> <strong>Périmé (&gt; 6h)</strong> —
-                    facteur ~0.5, route quasi exclue.
+                    <span className="text-caution">●</span> <strong>1h - 2h</strong> — facteur
+                    0.85, la donnée bouge vite.
+                  </p>
+                  <p>
+                    <span className="text-caution">●</span> <strong>2h - 4h</strong> — facteur
+                    0.70, méfiance sérieuse.
+                  </p>
+                  <p>
+                    <span className="text-critical">●</span> <strong>&gt; 4h</strong> — facteur
+                    0.55 puis 0.40, quasi exclu.
                   </p>
                 </div>
                 <p className="mt-3 text-ink-muted">
-                  D'où la <strong>check-list fraîcheur</strong> à droite des résultats : les
-                  pages marché à ouvrir en jeu pour rafraîchir les données AODP avant de committer.
+                  Deux outils pour combattre le pb :
                 </p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-ink-muted">
+                  <li>
+                    La <strong>check-list fraîcheur</strong> à droite = les pages à ouvrir en
+                    jeu (avec ton client AODP actif) pour actualiser la data.
+                  </li>
+                  <li>
+                    Le bouton <strong>Rafraîchir</strong> en haut des résultats force l'outil à
+                    contourner son cache interne (5 min) et re-questionner AODP tout de suite.
+                  </li>
+                </ul>
+                <Callout tone="info">
+                  <strong>Important :</strong> le coût d'achat affiché n'est pas décoté par la
+                  freshness. Confirme toujours le prix au marché en jeu avant de dépenser gros
+                  — si le carnet a bougé depuis la dernière upload, tu risques de payer plus.
+                </Callout>
               </Section>
 
               <Section icon={<Wand2 className="h-4 w-4" />} title="Les enchantements (.1 à .4)">

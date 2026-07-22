@@ -198,17 +198,21 @@ def freshness_confidence_factor(age_hours_value: float | None) -> float:
     Returns:
         Un facteur entre 0.5 et 1.0.
     """
+    # Bareme durci en V2.6 : entre 1h et 3h la donnee est souvent deja obsolete
+    # (le carnet AODP tourne vite), on retire plus tot le "bonus de fraicheur".
     if age_hours_value is None:
         return 0.50
     if age_hours_value < 0.5:
         return 1.0
-    if age_hours_value < 2:
+    if age_hours_value < 1:
         return 0.95
-    if age_hours_value < 4:
+    if age_hours_value < 2:
         return 0.85
-    if age_hours_value < 6:
+    if age_hours_value < 4:
         return 0.70
-    return 0.50
+    if age_hours_value < 6:
+        return 0.55
+    return 0.40
 
 
 def age_hours(age: timedelta | None) -> float | None:

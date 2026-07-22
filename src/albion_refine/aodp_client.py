@@ -118,7 +118,7 @@ class AodpClient:
         *,
         server: str = "europe",
         cache_dir: Path | None = None,
-        ttl_minutes: int = 15,
+        ttl_minutes: int = 5,
         use_cache: bool = True,
         timeout: float = config.HTTP_TIMEOUT_SECONDS,
         max_retries: int = config.HTTP_MAX_RETRIES,

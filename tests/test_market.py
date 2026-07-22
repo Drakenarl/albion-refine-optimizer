@@ -90,8 +90,8 @@ class TestRecoveryValue:
     def test_recovery_discounts_stale_buy_max(self) -> None:
         frais = market.compute_recovery_value(28, [(1000.0, 100)], data_age_hours=0.1)
         vieux = market.compute_recovery_value(28, [(1000.0, 100)], data_age_hours=13.0)
-        # Frais : facteur 1.00 ; > 6h : facteur 0.50 → deux fois moins.
-        assert vieux.valeur == pytest.approx(frais.valeur * 0.5)
+        # V2.6 : bareme durci, > 6h : facteur 0.40.
+        assert vieux.valeur == pytest.approx(frais.valeur * 0.40)
         # Le nombre absorbé ne change pas, seule la valeur est escomptée.
         assert vieux.absorbe == frais.absorbe
 
@@ -138,12 +138,25 @@ class TestFreshnessConfidence:
     def test_freshness_factor_1_0_for_fresh_data(self) -> None:
         assert market.freshness_confidence_factor(0.2) == 1.0
 
-    def test_freshness_factor_0_5_for_stale_data(self) -> None:
-        assert market.freshness_confidence_factor(8) == 0.5
+    def test_freshness_factor_0_4_for_stale_data(self) -> None:
+        # Bareme durci V2.6 : au-dela de 6h la confiance tombe a 0.40.
+        assert market.freshness_confidence_factor(8) == 0.40
 
     @pytest.mark.parametrize(
         ("age", "expected"),
-        [(0.0, 1.0), (0.5, 0.95), (1.9, 0.95), (2.0, 0.85), (3.1, 0.85), (5.7, 0.70), (6.0, 0.50)],
+        [
+            (0.0, 1.0),
+            (0.4, 1.0),
+            (0.5, 0.95),
+            (0.9, 0.95),
+            (1.0, 0.85),
+            (1.9, 0.85),
+            (2.0, 0.70),
+            (3.9, 0.70),
+            (4.0, 0.55),
+            (5.9, 0.55),
+            (6.0, 0.40),
+        ],
     )
     def test_palier_values(self, age: float, expected: float) -> None:
         assert market.freshness_confidence_factor(age) == pytest.approx(expected)
@@ -155,15 +168,17 @@ class TestFreshnessConfidence:
         frais = market.evaluate_instant_sell("Lymhurst", 1000.0, 100, data_age_hours=0.2)
         vieux = market.evaluate_instant_sell("Lymhurst", 1000.0, 100, data_age_hours=3.1)
         assert frais.revenu_net == pytest.approx(vieux.revenu_net)
-        assert vieux.freshness_factor == pytest.approx(0.85)
-        assert vieux.expected_revenu == pytest.approx(frais.expected_revenu * 0.85)
+        # V2.6 : 3.1h tombe dans le palier 2-4h -> 0.70.
+        assert vieux.freshness_factor == pytest.approx(0.70)
+        assert vieux.expected_revenu == pytest.approx(frais.expected_revenu * 0.70)
 
     def test_sell_order_revenue_is_weighted_too(self) -> None:
         scenario = market.evaluate_sell_order(
             "Lymhurst", 1500.0, 100, volume_24h=200, data_age_hours=5.7
         )
-        assert scenario.freshness_factor == pytest.approx(0.70)
-        assert scenario.revenu_net_pondere == pytest.approx(scenario.revenu_net * 0.70)
+        # V2.6 : 5.7h tombe dans le palier 4-6h -> 0.55.
+        assert scenario.freshness_factor == pytest.approx(0.55)
+        assert scenario.revenu_net_pondere == pytest.approx(scenario.revenu_net * 0.55)
         assert scenario.expected_revenu == pytest.approx(
             scenario.revenu_net_pondere * scenario.fill_proba
         )
