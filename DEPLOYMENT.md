@@ -9,9 +9,13 @@ service tiers a gerer.
 ```
 albion-optimizer.vercel.app
 ├── /                → frontend Vite (static, servi par CDN Vercel)
-└── /api/*           → api/index.py (fonction serverless Python 3.12)
+└── /api/*           → api/[[...path]].py (fonction serverless Python 3.12)
                        expose FastAPI health / config / optimize
 ```
+
+Le code metier vit dans `src/albion_refine/`. Le `buildCommand` le copie dans
+`api/albion_refine/` avant le packaging, parce que le bundler Python de Vercel
+n'embarque que ce qui est sous `api/`.
 
 ## Pre-requis
 
@@ -24,7 +28,12 @@ albion-optimizer.vercel.app
    `Drakenarl/albion-refine-optimizer`.
 2. **Configure** (Vercel devrait auto-detecter grace au [vercel.json](vercel.json)) :
    - Root Directory : **laisse la racine** (pas `web/` cette fois).
-   - Build Command : pre-rempli par vercel.json (`cd web && npm install && npm run build`).
+   - Framework Preset : **Other**. Voir *Pieges connus* plus bas — c'est le
+     point qui a casse le deploiement une fois, `vercel.json` le force
+     desormais via `"framework": null`.
+   - Build Command : pre-rempli par vercel.json (`rm -rf api/albion_refine &&
+     cp -r src/albion_refine api/albion_refine && cd web && npm install &&
+     npm run build`).
    - Output Directory : `web/dist`.
    - Install Command : Vercel installera automatiquement les deps Python via
      [requirements.txt](requirements.txt).
@@ -76,11 +85,66 @@ alors de definir `VITE_API_URL` cote frontend.
 - Chaque push sur une branche cree une preview URL du type
   `https://albion-refine-optimizer-git-<branche>-<user>.vercel.app`.
 
+## Pieges connus
+
+### 1. Vercel prend le projet pour une app FastAPI et le build meurt aussitot
+
+**Symptome** — le build echoue en ~2 secondes, avant meme le `buildCommand`
+(pas de `cp -r`, pas de `npm install` dans les logs) :
+
+```
+Running "vercel build"
+Vercel CLI 56.4.0
+Error: No FastAPI entrypoint found in default locations, but found potential entrypoints:
+  api/[[...path]].py (variable: app)
+  src/albion_refine/api.py (variable: app)
+  src/albion_refine/cli.py (variable: app)
+
+Add this to your pyproject.toml:
+
+[tool.vercel]
+entrypoint = "api.[[...path]]:app"
+```
+
+**Cause** — depuis le CLI 56.x, Vercel detecte les frameworks *backend*. Il voit
+`fastapi` dans les dependances et bascule le projet sur le preset FastAPI. Ce
+preset attend un `app = FastAPI(...)` a un emplacement standard (`app.py`,
+`main.py`, `index.py`, `server.py`, `wsgi.py`, `asgi.py`, a la racine ou dans
+`src/`, `app/`, `api/`). On n'en a aucun, donc il abandonne — et comme la
+detection tourne *avant* le `buildCommand`, rien de notre config ne s'applique.
+
+**Fix** — `"framework": null` dans [vercel.json](vercel.json). Ca force le preset
+« Other » et rend la main au chemin classique : `buildCommand` → static dans
+`outputDirectory` + fonctions Python decouvertes dans `api/`. La valeur du
+`vercel.json` prend le pas sur le Framework Preset du dashboard, donc pas besoin
+d'aller cliquer.
+
+**Ne PAS faire** — suivre la suggestion du message d'erreur et ajouter
+`[tool.vercel] entrypoint` dans `pyproject.toml`. Deux raisons :
+
+1. Ca deploierait le projet comme **une seule fonction FastAPI**, et le
+   frontend Vite statique passerait a la trappe (le preset FastAPI ne sert du
+   statique que depuis `public/`).
+2. L'entrypoint propose, `api.[[...path]]:app`, n'est meme pas valide :
+   `[[...path]]` n'est pas un nom de module Python importable.
+
+**Regle generale** — quand un build Vercel echoue *avant* le `buildCommand`,
+c'est la detection de framework, pas notre config. Inutile de chercher plus loin
+dans les logs : ils s'arretent la.
+
+### 2. `api/albion_refine/albion_refine/` apres un redeploy
+
+Le `cp -r src/albion_refine api/albion_refine` cree un dossier *imbrique* si la
+cible existe deja (comportement standard de `cp`). D'ou le `rm -rf
+api/albion_refine &&` en tete du `buildCommand`. A garder si tu touches a cette
+ligne.
+
 ## Debug
 
 | Symptome | Cause probable | Fix |
 |---|---|---|
-| Frontend charge, "Chargement config…" infini | La fonction Python a plante au demarrage | Vercel → onglet *Functions* → logs de `api/index.py` |
+| Frontend charge, "Chargement config…" infini | La fonction Python a plante au demarrage | `curl https://<url>/api/debug` → traceback JSON du boot (voir le try/except dans le handler) |
+| Build echoue en 2 s, `No FastAPI entrypoint found` | Detection auto du framework | Voir *Pieges connus* §1 |
 | `504 Gateway Timeout` | AODP trop lent, calcul > 10 s | Retry, ou reduire tier / capital |
 | `500 Internal Server Error` sur /api/* | Import Python casse, deps manquantes | Verifier requirements.txt, logs Vercel |
 | Build echoue `Cannot find package.json` | Vercel cherche package.json a la racine | Verifier que buildCommand inclut `cd web` |
@@ -90,8 +154,8 @@ alors de definir `VITE_API_URL` cote frontend.
 
 | Fichier | Role |
 |---|---|
-| [vercel.json](vercel.json) | Config monorepo (build, functions, rewrites) |
-| [api/index.py](api/index.py) | Handler serverless qui expose FastAPI |
+| [vercel.json](vercel.json) | Config monorepo (build, output, `framework: null`) |
+| [api/[[...path]].py](api/[[...path]].py) | Handler serverless catch-all qui expose FastAPI + endpoints de diagnostic si le boot echoue |
 | [requirements.txt](requirements.txt) | Deps Python installees par Vercel |
 | [web/vite.config.ts](web/vite.config.ts) | Proxy dev /api → :8000 (uniquement local) |
 | [Dockerfile](Dockerfile) + [railway.toml](railway.toml) | Backup pour redeploy backend ailleurs si besoin |
