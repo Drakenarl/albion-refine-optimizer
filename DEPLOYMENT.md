@@ -132,7 +132,32 @@ d'aller cliquer.
 c'est la detection de framework, pas notre config. Inutile de chercher plus loin
 dans les logs : ils s'arretent la.
 
-### 2. `api/albion_refine/albion_refine/` apres un redeploy
+### 2. `500 Internal Server Error` sur `/api/optimize` alors que `/api/config` marche
+
+**Symptome** — le frontend charge, la config est bien recuperee, mais toute
+optimisation retourne `Request failed with status code 500`. Pas de traceback
+cote frontend.
+
+**Cause** — `AodpClient` instancie un `diskcache.Cache` au demarrage de chaque
+requete `/api/optimize`. Le cache dir par defaut etait `~/.cache/albion-refine`
+(fallback Linux). Sur Vercel serverless, `Path.home()` = `/vercel` qui est
+**read-only** : le `mkdir(parents=True, exist_ok=True)` leve `PermissionError`
+et FastAPI convertit ca en 500.
+
+`/api/config` marchait parce qu'il ne touche pas au cache — c'est une page purement
+memoire.
+
+**Fix** — `_default_cache_dir()` dans `aodp_client.py` detecte l'env Vercel
+(via `VERCEL=1`, injecte automatiquement) et bascule sur `/tmp/albion-refine`,
+seul emplacement writable sur Vercel serverless (~500MB, dispo aussi sur AWS
+Lambda via `AWS_LAMBDA_FUNCTION_NAME`).
+
+**Regle generale** — sur Vercel/Lambda, tout `mkdir`, `open(..., 'w')` ou
+sqlite hors de `/tmp` va planter au premier appel. Si tu ajoutes une lib qui
+ecrit sur disque (cache, logs, db locale), redirige-la explicitement vers
+`/tmp` en detectant l'env serverless.
+
+### 3. `api/albion_refine/albion_refine/` apres un redeploy
 
 Le `cp -r src/albion_refine api/albion_refine` cree un dossier *imbrique* si la
 cible existe deja (comportement standard de `cp`). D'ou le `rm -rf

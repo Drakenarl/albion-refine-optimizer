@@ -28,11 +28,27 @@ class AodpError(RuntimeError):
 
 
 def _default_cache_dir() -> Path:
-    """Retourne le dossier de cache par défaut (``%LOCALAPPDATA%`` ou ``~/.cache``)."""
+    """Retourne le dossier de cache par defaut selon la plateforme.
+
+    Priorite :
+    1. ``ALBION_CACHE_DIR`` si explicitement configuree (echappement d'urgence).
+    2. ``/tmp/albion-refine`` sur Vercel (``VERCEL=1``) ou tout runtime
+       serverless connu : le reste du FS est read-only, seul ``/tmp`` accepte
+       l'ecriture (max ~500MB, persistance ~limite au conteneur chaud).
+    3. ``%LOCALAPPDATA%\\albion-refine`` sous Windows.
+    4. ``~/.cache/albion-refine`` en fallback (Linux / macOS locaux).
+    """
     import os
 
-    base = os.environ.get("LOCALAPPDATA") or os.path.join(Path.home(), ".cache")
-    return Path(base) / "albion-refine"
+    explicit = os.environ.get("ALBION_CACHE_DIR")
+    if explicit:
+        return Path(explicit)
+    if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return Path("/tmp/albion-refine")
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        return Path(local_app_data) / "albion-refine"
+    return Path.home() / ".cache" / "albion-refine"
 
 
 def parse_aodp_date(value: str | None) -> datetime | None:
