@@ -56,6 +56,34 @@ class TestResourceAbstraction:
         # Utile pour l'API HTTP qui reçoit une string.
         assert config.resource("wood").kind is ResourceKind.WOOD
         assert config.resource("hide").kind is ResourceKind.HIDE
+        assert config.resource("fiber").kind is ResourceKind.FIBER
+        assert config.resource("ore").kind is ResourceKind.ORE
+        assert config.resource("stone").kind is ResourceKind.STONE
+
+    def test_fiber_maps_to_cloth_at_lymhurst(self) -> None:
+        res = config.resource(ResourceKind.FIBER)
+        assert res.raw_item_id(7) == "T7_FIBER"
+        assert res.refined_item_id(6) == "T6_CLOTH"
+        assert res.refining_city == "Lymhurst"
+        assert res.display_raw == "fibre"
+        assert res.display_refined == "tissu"
+
+    def test_ore_maps_to_metalbar_at_thetford(self) -> None:
+        res = config.resource(ResourceKind.ORE)
+        assert res.raw_item_id(7) == "T7_ORE"
+        assert res.refined_item_id(6) == "T6_METALBAR"
+        assert res.refining_city == "Thetford"
+        assert res.display_raw == "minerai"
+        assert res.display_refined == "lingot"
+
+    def test_stone_maps_to_stoneblock_at_bridgewatch(self) -> None:
+        res = config.resource(ResourceKind.STONE)
+        # Attention : la pierre brute est encodee "ROCK" (pas "STONE") cote AODP.
+        assert res.raw_item_id(7) == "T7_ROCK"
+        assert res.refined_item_id(6) == "T6_STONEBLOCK"
+        assert res.refining_city == "Bridgewatch"
+        assert res.display_raw == "pierre"
+        assert res.display_refined == "bloc de pierre"
 
 
 class TestHidePipeline:

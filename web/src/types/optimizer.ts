@@ -8,7 +8,7 @@ export type SellStrategy = 'instant_sell' | 'sell_order'
 export type FreshnessLevel = 'fresh' | 'warning' | 'critical' | 'unknown'
 export type RecupMode = 'local' | 'with-planks'
 export type SourcingMode = 'market' | 'production'
-export type ResourceKind = 'wood' | 'hide'
+export type ResourceKind = 'wood' | 'hide' | 'fiber' | 'ore' | 'stone'
 
 export interface ResourceOption {
   kind: ResourceKind

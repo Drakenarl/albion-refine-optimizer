@@ -24,6 +24,9 @@ const RESOURCE_LABELS: Record<
 > = {
   wood: { raw: 'bois', refined: 'plank', refiningCity: 'Fort Sterling' },
   hide: { raw: 'peau', refined: 'cuir', refiningCity: 'Martlock' },
+  fiber: { raw: 'fibre', refined: 'tissu', refiningCity: 'Lymhurst' },
+  ore: { raw: 'minerai', refined: 'lingot', refiningCity: 'Thetford' },
+  stone: { raw: 'pierre', refined: 'bloc', refiningCity: 'Bridgewatch' },
 }
 
 const RECO_LABEL: Record<string, string> = {

@@ -1,10 +1,11 @@
 import { useEffect, useState, type FC } from 'react'
 import { AxiosError } from 'axios'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AlertTriangle, Loader2, PackageSearch } from 'lucide-react'
+import { AlertTriangle, HelpCircle, Loader2, PackageSearch } from 'lucide-react'
 
 import AlternativesList from './components/AlternativesList'
 import ChecklistPanel from './components/ChecklistPanel'
+import HowItWorksModal from './components/HowItWorksModal'
 import OptimizeForm from './components/OptimizeForm'
 import RouteCard from './components/RouteCard'
 import { fetchConfig, postOptimize } from './api/optimize'
@@ -21,6 +22,7 @@ const App: FC = () => {
   const [lastPayload, setLastPayload] = useState<OptimizeRequest | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [guideOpen, setGuideOpen] = useState(false)
 
   useEffect(() => {
     fetchConfig()
@@ -52,17 +54,27 @@ const App: FC = () => {
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Albion Refine Optimizer</h1>
             <p className="mt-0.5 text-xs text-ink-muted">
-              Raffinage bois &amp; peau · Fort Sterling / Martlock · V2.2
+              5 filières · bois · peau · fibre · minerai · pierre · V2.4
             </p>
           </div>
-          <a
-            href="https://github.com/Drakenarl/albion-refine-optimizer"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-ink-faint transition hover:text-ink"
-          >
-            GitHub ↗
-          </a>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setGuideOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-surface-border px-3 py-1.5 text-xs font-medium text-ink-muted transition hover:border-primary-500/50 hover:bg-primary-500/5 hover:text-ink"
+            >
+              <HelpCircle className="h-3.5 w-3.5" />
+              Comment ça marche
+            </button>
+            <a
+              href="https://github.com/Drakenarl/albion-refine-optimizer"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-ink-faint transition hover:text-ink"
+            >
+              GitHub ↗
+            </a>
+          </div>
         </div>
       </header>
 
@@ -115,6 +127,8 @@ const App: FC = () => {
       <footer className="mt-16 border-t border-surface-border/60 py-6 text-center text-xs text-ink-faint">
         Donnees fournies par le Albion Online Data Project. Non affilie a Sandbox Interactive.
       </footer>
+
+      <HowItWorksModal open={guideOpen} onClose={() => setGuideOpen(false)} />
     </div>
   )
 }

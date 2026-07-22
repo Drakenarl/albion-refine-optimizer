@@ -48,12 +48,19 @@ class ResourceKind(StrEnum):
     """Filiere de raffinage supportee (miroir de ``config.ResourceKind``).
 
     Definie ici en plus de ``config`` pour eviter qu'un modele importe
-    ``config`` (couche superieure). Les deux enums partagent les memes valeurs
-    de slug (``wood``, ``hide``), et ``config.resource(kind)`` accepte les deux.
+    ``config`` (couche superieure). Les slugs matchent ceux exposes par l'API
+    HTTP, et ``config.resource(kind)`` accepte les deux formes.
+
+    Extension V2.4 : ajout de fibre / minerai / pierre pour couvrir les cinq
+    filieres de raffinage du continent Royal. Chaque filiere garde ses IDs
+    AODP et sa ville specialite, mais partage la meme logique metier.
     """
 
     WOOD = "wood"
     HIDE = "hide"
+    FIBER = "fiber"
+    ORE = "ore"
+    STONE = "stone"
 
 
 class FreshnessLevel(StrEnum):

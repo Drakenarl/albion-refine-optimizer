@@ -266,6 +266,31 @@ def check_item_ids() -> None:
         present = item_id in data.get("leather", {})
         console.print(f"cuir    T{tier} : {item_id} {'✓' if present else '✗ ABSENT'}")
         ok = ok and present
+    # V2.4 : trois nouvelles filieres du continent Royal.
+    for tier, item_id in config.FIBER_ITEM_IDS.items():
+        present = item_id in data.get("fiber", {})
+        console.print(f"fibre   T{tier} : {item_id} {'✓' if present else '✗ ABSENT'}")
+        ok = ok and present
+    for tier, item_id in config.CLOTH_ITEM_IDS.items():
+        present = item_id in data.get("cloth", {})
+        console.print(f"tissu   T{tier} : {item_id} {'✓' if present else '✗ ABSENT'}")
+        ok = ok and present
+    for tier, item_id in config.ORE_ITEM_IDS.items():
+        present = item_id in data.get("ore", {})
+        console.print(f"minerai T{tier} : {item_id} {'✓' if present else '✗ ABSENT'}")
+        ok = ok and present
+    for tier, item_id in config.METALBAR_ITEM_IDS.items():
+        present = item_id in data.get("metalbar", {})
+        console.print(f"lingot  T{tier} : {item_id} {'✓' if present else '✗ ABSENT'}")
+        ok = ok and present
+    for tier, item_id in config.ROCK_ITEM_IDS.items():
+        present = item_id in data.get("stone", {})
+        console.print(f"pierre  T{tier} : {item_id} {'✓' if present else '✗ ABSENT'}")
+        ok = ok and present
+    for tier, item_id in config.STONEBLOCK_ITEM_IDS.items():
+        present = item_id in data.get("stoneblock", {})
+        console.print(f"bloc    T{tier} : {item_id} {'✓' if present else '✗ ABSENT'}")
+        ok = ok and present
     if not ok:
         raise typer.Exit(code=1)
     console.print("[bold green]Tous les item IDs sont valides.[/]")

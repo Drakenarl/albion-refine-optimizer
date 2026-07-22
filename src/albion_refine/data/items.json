@@ -3,7 +3,7 @@
     "description": "Extract réduit des items.json de l'AODP : matières premières (bois, peau) et raffinés (planks, cuir) T2-T8 pertinents pour l'optimiseur",
     "source": "https://github.com/broderickhyman/ao-bin-dumps/blob/master/formatted/items.json",
     "extracted_on": "2026-07-19",
-    "extended_on": "2026-07-21 (ajout filiere peau -> cuir a Martlock)",
+    "extended_on": "2026-07-22 (ajout filieres fibre->tissu@Lymhurst, minerai->lingot@Thetford, pierre->bloc@Bridgewatch)",
     "server_compatibility": "europe, west, east"
   },
   "wood": {
@@ -344,6 +344,414 @@
       "safe_route": true,
       "excluded_by_default": true,
       "note": "Transport cher et faible volume, exclue par défaut"
+    }
+  },
+  "fiber": {
+    "T4_FIBER": {
+      "item_id": "T4_FIBER",
+      "tier": 4,
+      "en_name": "Cotton",
+      "fr_name": "",
+      "category": "raw_resource",
+      "resource_type": "fiber"
+    },
+    "T5_FIBER": {
+      "item_id": "T5_FIBER",
+      "tier": 5,
+      "en_name": "Flax",
+      "fr_name": "",
+      "category": "raw_resource",
+      "resource_type": "fiber"
+    },
+    "T6_FIBER": {
+      "item_id": "T6_FIBER",
+      "tier": 6,
+      "en_name": "Hemp",
+      "fr_name": "",
+      "category": "raw_resource",
+      "resource_type": "fiber"
+    },
+    "T7_FIBER": {
+      "item_id": "T7_FIBER",
+      "tier": 7,
+      "en_name": "Skyflower",
+      "fr_name": "",
+      "category": "raw_resource",
+      "resource_type": "fiber"
+    },
+    "T8_FIBER": {
+      "item_id": "T8_FIBER",
+      "tier": 8,
+      "en_name": "Redleaf Cotton",
+      "fr_name": "",
+      "category": "raw_resource",
+      "resource_type": "fiber"
+    }
+  },
+  "cloth": {
+    "_recipe_note": "Meme structure de recette que wood/hide. IDs verifies contre AODP le 2026-07-22.",
+    "T2_CLOTH": {
+      "item_id": "T2_CLOTH",
+      "tier": 2,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "cloth",
+      "recipe": {
+        "fiber_tier": 2,
+        "fiber_qty": 1,
+        "lower_cloth_tier": null,
+        "lower_cloth_qty": 0
+      }
+    },
+    "T3_CLOTH": {
+      "item_id": "T3_CLOTH",
+      "tier": 3,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "cloth",
+      "recipe": {
+        "fiber_tier": 3,
+        "fiber_qty": 2,
+        "lower_cloth_tier": 2,
+        "lower_cloth_qty": 1
+      }
+    },
+    "T4_CLOTH": {
+      "item_id": "T4_CLOTH",
+      "tier": 4,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "cloth",
+      "recipe": {
+        "fiber_tier": 4,
+        "fiber_qty": 2,
+        "lower_cloth_tier": 3,
+        "lower_cloth_qty": 1
+      }
+    },
+    "T5_CLOTH": {
+      "item_id": "T5_CLOTH",
+      "tier": 5,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "cloth",
+      "recipe": {
+        "fiber_tier": 5,
+        "fiber_qty": 3,
+        "lower_cloth_tier": 4,
+        "lower_cloth_qty": 1
+      }
+    },
+    "T6_CLOTH": {
+      "item_id": "T6_CLOTH",
+      "tier": 6,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "cloth",
+      "recipe": {
+        "fiber_tier": 6,
+        "fiber_qty": 4,
+        "lower_cloth_tier": 5,
+        "lower_cloth_qty": 1
+      }
+    },
+    "T7_CLOTH": {
+      "item_id": "T7_CLOTH",
+      "tier": 7,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "cloth",
+      "recipe": {
+        "fiber_tier": 7,
+        "fiber_qty": 5,
+        "lower_cloth_tier": 6,
+        "lower_cloth_qty": 1
+      }
+    },
+    "T8_CLOTH": {
+      "item_id": "T8_CLOTH",
+      "tier": 8,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "cloth",
+      "recipe": {
+        "fiber_tier": 8,
+        "fiber_qty": 5,
+        "lower_cloth_tier": 7,
+        "lower_cloth_qty": 1
+      }
+    }
+  },
+  "ore": {
+    "T4_ORE": {
+      "item_id": "T4_ORE",
+      "tier": 4,
+      "en_name": "Titanium Ore",
+      "fr_name": "",
+      "category": "raw_resource",
+      "resource_type": "ore"
+    },
+    "T5_ORE": {
+      "item_id": "T5_ORE",
+      "tier": 5,
+      "en_name": "Iron Ore",
+      "fr_name": "",
+      "category": "raw_resource",
+      "resource_type": "ore"
+    },
+    "T6_ORE": {
+      "item_id": "T6_ORE",
+      "tier": 6,
+      "en_name": "Titanium Ore",
+      "fr_name": "",
+      "category": "raw_resource",
+      "resource_type": "ore"
+    },
+    "T7_ORE": {
+      "item_id": "T7_ORE",
+      "tier": 7,
+      "en_name": "Runite Ore",
+      "fr_name": "",
+      "category": "raw_resource",
+      "resource_type": "ore"
+    },
+    "T8_ORE": {
+      "item_id": "T8_ORE",
+      "tier": 8,
+      "en_name": "Meteorite Ore",
+      "fr_name": "",
+      "category": "raw_resource",
+      "resource_type": "ore"
+    }
+  },
+  "metalbar": {
+    "_recipe_note": "Meme structure de recette que wood/hide. IDs verifies contre AODP le 2026-07-22.",
+    "T2_METALBAR": {
+      "item_id": "T2_METALBAR",
+      "tier": 2,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "metalbar",
+      "recipe": {
+        "ore_tier": 2,
+        "ore_qty": 1,
+        "lower_metalbar_tier": null,
+        "lower_metalbar_qty": 0
+      }
+    },
+    "T3_METALBAR": {
+      "item_id": "T3_METALBAR",
+      "tier": 3,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "metalbar",
+      "recipe": {
+        "ore_tier": 3,
+        "ore_qty": 2,
+        "lower_metalbar_tier": 2,
+        "lower_metalbar_qty": 1
+      }
+    },
+    "T4_METALBAR": {
+      "item_id": "T4_METALBAR",
+      "tier": 4,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "metalbar",
+      "recipe": {
+        "ore_tier": 4,
+        "ore_qty": 2,
+        "lower_metalbar_tier": 3,
+        "lower_metalbar_qty": 1
+      }
+    },
+    "T5_METALBAR": {
+      "item_id": "T5_METALBAR",
+      "tier": 5,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "metalbar",
+      "recipe": {
+        "ore_tier": 5,
+        "ore_qty": 3,
+        "lower_metalbar_tier": 4,
+        "lower_metalbar_qty": 1
+      }
+    },
+    "T6_METALBAR": {
+      "item_id": "T6_METALBAR",
+      "tier": 6,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "metalbar",
+      "recipe": {
+        "ore_tier": 6,
+        "ore_qty": 4,
+        "lower_metalbar_tier": 5,
+        "lower_metalbar_qty": 1
+      }
+    },
+    "T7_METALBAR": {
+      "item_id": "T7_METALBAR",
+      "tier": 7,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "metalbar",
+      "recipe": {
+        "ore_tier": 7,
+        "ore_qty": 5,
+        "lower_metalbar_tier": 6,
+        "lower_metalbar_qty": 1
+      }
+    },
+    "T8_METALBAR": {
+      "item_id": "T8_METALBAR",
+      "tier": 8,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "metalbar",
+      "recipe": {
+        "ore_tier": 8,
+        "ore_qty": 5,
+        "lower_metalbar_tier": 7,
+        "lower_metalbar_qty": 1
+      }
+    }
+  },
+  "stone": {
+    "T4_ROCK": {
+      "item_id": "T4_ROCK",
+      "tier": 4,
+      "en_name": "Limestone",
+      "fr_name": "",
+      "category": "raw_resource",
+      "resource_type": "rock"
+    },
+    "T5_ROCK": {
+      "item_id": "T5_ROCK",
+      "tier": 5,
+      "en_name": "Travertine",
+      "fr_name": "",
+      "category": "raw_resource",
+      "resource_type": "rock"
+    },
+    "T6_ROCK": {
+      "item_id": "T6_ROCK",
+      "tier": 6,
+      "en_name": "Basalt",
+      "fr_name": "",
+      "category": "raw_resource",
+      "resource_type": "rock"
+    },
+    "T7_ROCK": {
+      "item_id": "T7_ROCK",
+      "tier": 7,
+      "en_name": "Marble",
+      "fr_name": "",
+      "category": "raw_resource",
+      "resource_type": "rock"
+    },
+    "T8_ROCK": {
+      "item_id": "T8_ROCK",
+      "tier": 8,
+      "en_name": "Onyx",
+      "fr_name": "",
+      "category": "raw_resource",
+      "resource_type": "rock"
+    }
+  },
+  "stoneblock": {
+    "_recipe_note": "Meme structure de recette que wood/hide. IDs verifies contre AODP le 2026-07-22.",
+    "T2_STONEBLOCK": {
+      "item_id": "T2_STONEBLOCK",
+      "tier": 2,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "stoneblock",
+      "recipe": {
+        "rock_tier": 2,
+        "rock_qty": 1,
+        "lower_stoneblock_tier": null,
+        "lower_stoneblock_qty": 0
+      }
+    },
+    "T3_STONEBLOCK": {
+      "item_id": "T3_STONEBLOCK",
+      "tier": 3,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "stoneblock",
+      "recipe": {
+        "rock_tier": 3,
+        "rock_qty": 2,
+        "lower_stoneblock_tier": 2,
+        "lower_stoneblock_qty": 1
+      }
+    },
+    "T4_STONEBLOCK": {
+      "item_id": "T4_STONEBLOCK",
+      "tier": 4,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "stoneblock",
+      "recipe": {
+        "rock_tier": 4,
+        "rock_qty": 2,
+        "lower_stoneblock_tier": 3,
+        "lower_stoneblock_qty": 1
+      }
+    },
+    "T5_STONEBLOCK": {
+      "item_id": "T5_STONEBLOCK",
+      "tier": 5,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "stoneblock",
+      "recipe": {
+        "rock_tier": 5,
+        "rock_qty": 3,
+        "lower_stoneblock_tier": 4,
+        "lower_stoneblock_qty": 1
+      }
+    },
+    "T6_STONEBLOCK": {
+      "item_id": "T6_STONEBLOCK",
+      "tier": 6,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "stoneblock",
+      "recipe": {
+        "rock_tier": 6,
+        "rock_qty": 4,
+        "lower_stoneblock_tier": 5,
+        "lower_stoneblock_qty": 1
+      }
+    },
+    "T7_STONEBLOCK": {
+      "item_id": "T7_STONEBLOCK",
+      "tier": 7,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "stoneblock",
+      "recipe": {
+        "rock_tier": 7,
+        "rock_qty": 5,
+        "lower_stoneblock_tier": 6,
+        "lower_stoneblock_qty": 1
+      }
+    },
+    "T8_STONEBLOCK": {
+      "item_id": "T8_STONEBLOCK",
+      "tier": 8,
+      "en_name": "",
+      "category": "refined_resource",
+      "resource_type": "stoneblock",
+      "recipe": {
+        "rock_tier": 8,
+        "rock_qty": 5,
+        "lower_stoneblock_tier": 7,
+        "lower_stoneblock_qty": 1
+      }
     }
   }
 }

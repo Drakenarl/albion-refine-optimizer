@@ -96,6 +96,36 @@ RESOURCES: Final[dict[ResourceKind, Resource]] = {
         display_raw="peau",
         display_refined="cuir",
     ),
+    # V2.4 : trois nouvelles filieres du continent Royal.
+    # IDs AODP verifies contre https://europe.albion-online-data.com le
+    # 2026-07-22 (probe curl sur T5_FIBER/T5_CLOTH/T5_ORE/T5_METALBAR/T5_ROCK/
+    # T5_STONEBLOCK sur Lymhurst/Thetford/Bridgewatch : donnees remontees).
+    # Bonus ville verifies via wiki.albiononline.com/wiki/Resource_return_rate :
+    # base +18% general + specialite +40%, identique pour toutes les filieres.
+    ResourceKind.FIBER: Resource(
+        kind=ResourceKind.FIBER,
+        raw_prefix="FIBER",
+        refined_prefix="CLOTH",
+        refining_city="Lymhurst",
+        display_raw="fibre",
+        display_refined="tissu",
+    ),
+    ResourceKind.ORE: Resource(
+        kind=ResourceKind.ORE,
+        raw_prefix="ORE",
+        refined_prefix="METALBAR",
+        refining_city="Thetford",
+        display_raw="minerai",
+        display_refined="lingot",
+    ),
+    ResourceKind.STONE: Resource(
+        kind=ResourceKind.STONE,
+        raw_prefix="ROCK",  # AODP encode la pierre brute en "ROCK" (pas "STONE")
+        refined_prefix="STONEBLOCK",
+        refining_city="Bridgewatch",
+        display_raw="pierre",
+        display_refined="bloc de pierre",
+    ),
 }
 
 
@@ -110,6 +140,12 @@ WOOD_ITEM_IDS: Final[dict[int, str]] = {tier: f"T{tier}_WOOD" for tier in range(
 PLANK_ITEM_IDS: Final[dict[int, str]] = {tier: f"T{tier}_PLANKS" for tier in range(3, 9)}
 HIDE_ITEM_IDS: Final[dict[int, str]] = {tier: f"T{tier}_HIDE" for tier in range(4, 9)}
 LEATHER_ITEM_IDS: Final[dict[int, str]] = {tier: f"T{tier}_LEATHER" for tier in range(3, 9)}
+FIBER_ITEM_IDS: Final[dict[int, str]] = {tier: f"T{tier}_FIBER" for tier in range(4, 9)}
+CLOTH_ITEM_IDS: Final[dict[int, str]] = {tier: f"T{tier}_CLOTH" for tier in range(3, 9)}
+ORE_ITEM_IDS: Final[dict[int, str]] = {tier: f"T{tier}_ORE" for tier in range(4, 9)}
+METALBAR_ITEM_IDS: Final[dict[int, str]] = {tier: f"T{tier}_METALBAR" for tier in range(3, 9)}
+ROCK_ITEM_IDS: Final[dict[int, str]] = {tier: f"T{tier}_ROCK" for tier in range(4, 9)}
+STONEBLOCK_ITEM_IDS: Final[dict[int, str]] = {tier: f"T{tier}_STONEBLOCK" for tier in range(3, 9)}
 
 
 def wood_item_id(tier: int) -> str:
