@@ -38,9 +38,10 @@ interface FormState {
   enchant: number
 }
 
-// Valeurs par defaut affichees en gris tant que l'utilisateur n'a pas touche
-// au champ. Des qu'il modifie le contenu, le style repasse en clair.
-const INITIAL_DEFAULTS = {
+// Valeurs par defaut appliquees si l'utilisateur laisse le champ vide.
+// Elles sont affichees en placeholder HTML natif (grises, en arriere plan) et
+// remplacees des que l'utilisateur tape quoi que ce soit.
+const DEFAULTS = {
   capital: '3000000',
   stationRate: '50',
 }
@@ -49,18 +50,18 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
   const [state, setState] = useState<FormState>({
     tier: 7,
     mode: 'capital',
-    capital: INITIAL_DEFAULTS.capital,
+    capital: '',
     quantite: '',
     focusAvailable: '',
     focus: true,
-    stationRate: INITIAL_DEFAULTS.stationRate,
-    seuilMarge: String(config.seuil_marge_default),
+    stationRate: '',
+    seuilMarge: '',
     server: 'europe',
     resource: 'wood',
     enchant: 0,
   })
-  // Valeur par defaut du seuil : on la calcule apres le useState pour utiliser
-  // config chargee. C'est un derivee, pas un state.
+  // Le seuil ROI par defaut vient de la config backend ; on le prend comme
+  // valeur de repli quand le champ reste vide.
   const seuilMargeDefault = String(config.seuil_marge_default)
 
   const currentResource =
@@ -70,24 +71,22 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
     setState((prev) => ({ ...prev, [key]: value }))
   }
 
-  // Un champ est "pristine" tant que sa valeur == la valeur initiale. On grise
-  // le texte dans ce cas pour signaler "c'est un defaut, tu peux modifier".
-  const pristineClass = (isPristine: boolean): string =>
-    isPristine ? 'text-ink-faint' : 'text-ink'
-
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault()
+    // Champs vides -> on retombe sur la valeur par defaut (celle affichee en
+    // placeholder). C'est ce qui permet d'utiliser placeholder="3000000" tout
+    // en soumettant 3000000 quand l'utilisateur n'a rien tape.
     const payload: OptimizeRequest = {
       tier: state.tier,
       mode: state.mode,
-      station_rate: Number(state.stationRate),
+      station_rate: Number(state.stationRate || DEFAULTS.stationRate),
       focus: state.focus,
-      seuil_marge_min_pct: Number(state.seuilMarge),
+      seuil_marge_min_pct: Number(state.seuilMarge || seuilMargeDefault),
       server: state.server,
       resource: state.resource,
       enchant: state.enchant,
     }
-    if (state.mode === 'capital') payload.capital = Number(state.capital)
+    if (state.mode === 'capital') payload.capital = Number(state.capital || DEFAULTS.capital)
     if (state.mode === 'fixed') payload.quantite = Number(state.quantite)
     if (state.mode === 'focus') payload.focus_available = Number(state.focusAvailable)
     onSubmit(payload)
@@ -180,9 +179,9 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
             type="number"
             value={state.stationRate}
             onChange={(e) => patch('stationRate', e.target.value)}
-            className={cn(inputClass, pristineClass(state.stationRate === INITIAL_DEFAULTS.stationRate))}
+            className={cn(inputClass, 'text-ink')}
             min={1}
-            required
+            placeholder={DEFAULTS.stationRate}
           />
         </Field>
 
@@ -192,9 +191,9 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
               type="number"
               value={state.capital}
               onChange={(e) => patch('capital', e.target.value)}
-              className={cn(inputClass, pristineClass(state.capital === INITIAL_DEFAULTS.capital))}
+              className={cn(inputClass, 'text-ink')}
               min={1}
-              required
+              placeholder={DEFAULTS.capital}
             />
           </Field>
         )}
@@ -238,8 +237,9 @@ const OptimizeForm: FC<Props> = ({ config, loading, onSubmit }) => {
             type="number"
             value={state.seuilMarge}
             onChange={(e) => patch('seuilMarge', e.target.value)}
-            className={cn(inputClass, pristineClass(state.seuilMarge === seuilMargeDefault))}
+            className={cn(inputClass, 'text-ink')}
             step={1}
+            placeholder={seuilMargeDefault}
           />
         </Field>
 
