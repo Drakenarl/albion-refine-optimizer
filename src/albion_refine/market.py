@@ -223,6 +223,114 @@ def age_hours(age: timedelta | None) -> float | None:
 
 
 # ---------------------------------------------------------------------------
+# Slippage cote achat (V2.7)
+# ---------------------------------------------------------------------------
+#
+# AODP n'expose que ``sell_price_min`` sans profondeur : on ne sait pas
+# combien d'unites sont disponibles a ce prix. Or en pratique, sur un carnet
+# reel, il y a souvent 1-2 unites au top puis un mur plus haut. Traiter le
+# sell_price_min comme si tu pouvais acheter des milliers d'unites au meme
+# prix gonfle artificiellement la ROI et trompe l'utilisateur au moment de
+# l'achat in-game.
+#
+# On modelise donc une inflation du prix d'achat basee sur deux facteurs
+# multiplicatifs cales sur les proxies disponibles :
+# - la profondeur estimee (ratio quantite / volume 24h)
+# - la fraicheur de la donnee AODP
+#
+# Le total est plafonne : au-dela de +25% la route est de toute facon
+# suspecte, inutile de la tuer via un chiffre theorique.
+
+
+class BuyInflation(NamedTuple):
+    """Detail du facteur d'inflation applique a un prix d'achat."""
+
+    slippage_qty: float  # composante profondeur, [0, 0.20]
+    inflation_age: float  # composante fraicheur, [0, 0.15]
+    total_factor: float  # 1 + inflation totale (capee), applique au prix
+    capped: bool  # True si le cap a ete atteint (signale un run risque)
+
+
+BUY_INFLATION_CAP: float = 0.25  # +25% max, cf commentaire ci-dessus.
+
+
+def _slippage_from_ratio(ratio: float) -> float:
+    """Barème d'inflation liee a la profondeur (quantite demandee / volume 24h)."""
+    if ratio < 0.10:
+        return 0.0
+    if ratio < 0.25:
+        return 0.02
+    if ratio < 0.50:
+        return 0.05
+    if ratio < 1.00:
+        return 0.10
+    return 0.20
+
+
+def _inflation_from_age(age_hours_value: float | None) -> float:
+    """Barème d'inflation liee a l'age du prix d'achat.
+
+    Symetrique de la decote appliquee au revenu de vente : une donnee ancienne
+    signifie que le carnet a probablement bouge depuis, defavorablement pour
+    l'acheteur.
+    """
+    if age_hours_value is None:
+        return 0.15
+    if age_hours_value < 0.5:
+        return 0.0
+    if age_hours_value < 1:
+        return 0.02
+    if age_hours_value < 2:
+        return 0.05
+    if age_hours_value < 4:
+        return 0.10
+    return 0.15
+
+
+def buy_side_inflation(
+    quantity: int,
+    volume_24h: float,
+    age_hours_value: float | None,
+) -> BuyInflation:
+    """Calcule le facteur d'inflation a appliquer au sell_price_min a l'achat.
+
+    Combinaison multiplicative de la composante profondeur et de la composante
+    fraicheur, plafonnee a ``BUY_INFLATION_CAP``.
+
+    Args:
+        quantity: Quantite qu'on prevoit d'acheter.
+        volume_24h: Volume 24h du meme item dans la meme ville (proxy de
+            profondeur). ``0`` = volume inconnu, on applique le max de la
+            composante profondeur pour rester conservateur.
+        age_hours_value: Age du sell_price_min en heures. ``None`` = age
+            inconnu, on applique le max de la composante fraicheur.
+
+    Returns:
+        Un ``BuyInflation`` detaillant les composantes et le facteur total.
+    """
+    if volume_24h <= 0 or quantity <= 0:
+        # Sans historique de volume exploitable, on ne peut pas estimer la
+        # profondeur. On laisse la composante profondeur a 0 : la composante
+        # fraicheur (age de la donnee) prend deja le relais pour signaler
+        # l'incertitude. Eviter la double penalite.
+        slippage = 0.0
+    else:
+        slippage = _slippage_from_ratio(quantity / volume_24h)
+    inflation = _inflation_from_age(age_hours_value)
+    # Composition multiplicative : (1 + a) * (1 + b) - 1.
+    combined = (1.0 + slippage) * (1.0 + inflation) - 1.0
+    capped = combined > BUY_INFLATION_CAP
+    if capped:
+        combined = BUY_INFLATION_CAP
+    return BuyInflation(
+        slippage_qty=slippage,
+        inflation_age=inflation,
+        total_factor=1.0 + combined,
+        capped=capped,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Taxes
 # ---------------------------------------------------------------------------
 

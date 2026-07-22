@@ -143,21 +143,41 @@ def _make_leg(
     quantity: int,
     now: datetime,
     params: OptimizerParams,
+    volume: VolumeData | None,
 ) -> SourcingLeg:
-    """Construit un ``SourcingLeg`` (achat bois ou plank) à partir d'un quote."""
+    """Construit un ``SourcingLeg`` (achat bois ou plank) à partir d'un quote.
+
+    Depuis V2.7, le prix effectif utilise dans le cout total est le
+    sell_price_min AODP gonfle d'un facteur d'inflation qui modelise la
+    profondeur reelle du carnet (proxy via volume 24h) et la fraicheur de la
+    donnee. Cela evite de sur-estimer une route dont on croit acheter la
+    quantite entiere au top du carnet.
+    """
     age = quote.sell_min_age(now)
+    age_hours_value = market.age_hours(age)
     freshness = market.classify_freshness(
         age, params.freshness_warning_hours, params.freshness_critical_hours
     )
+    inflation = market.buy_side_inflation(
+        quantity=quantity,
+        volume_24h=volume.total_volume_24h if volume is not None else 0.0,
+        age_hours_value=age_hours_value,
+    )
+    prix_ref = float(quote.sell_price_min)
+    prix_effectif = prix_ref * inflation.total_factor
     return SourcingLeg(
         kind=kind,
         item_id=quote.item_id,
         tier=tier,
         city=quote.city,
-        prix_unitaire=float(quote.sell_price_min),
+        prix_unitaire=prix_effectif,
+        prix_ref=prix_ref,
+        slippage_pct=(inflation.total_factor - 1.0) * 100.0,
+        slippage_qty_pct=inflation.slippage_qty * 100.0,
+        slippage_age_pct=inflation.inflation_age * 100.0,
         quantite=quantity,
-        cout_total=quantity * quote.sell_price_min,
-        data_age_hours=market.age_hours(age),
+        cout_total=quantity * prix_effectif,
+        data_age_hours=age_hours_value,
         freshness=freshness,
     )
 
@@ -344,9 +364,25 @@ def _build_route(
     if sale is None:
         return None
 
-    wood_leg = _make_leg("wood", tier, wood_quote, refined.wood_utilise, now, params)
+    wood_leg = _make_leg(
+        "wood",
+        tier,
+        wood_quote,
+        refined.wood_utilise,
+        now,
+        params,
+        volumes.get((wood_quote.item_id, wood_quote.city)),
+    )
     plank_leg = (
-        _make_leg("plank", tier - 1, plank_quote, refined.plank_moins_1_utilise, now, params)
+        _make_leg(
+            "plank",
+            tier - 1,
+            plank_quote,
+            refined.plank_moins_1_utilise,
+            now,
+            params,
+            volumes.get((plank_quote.item_id, plank_quote.city)),
+        )
         if plank_quote is not None
         else None
     )
@@ -417,6 +453,13 @@ def _build_route(
         warnings.append(WarningCode.RECUP_PARTIELLE)
     if _recup_saturates(recup_wood, recup_plank, wood_quote, plank_quote, recup_city, volumes):
         warnings.append(WarningCode.RECUP_SATURATION)
+    # V2.7 : signale un slippage buy > 8% sur au moins une jambe. C'est un
+    # seuil arbitraire qui separe "route un peu risquee mais probablement OK"
+    # d'"attention, verifie tres serieusement le carnet en jeu".
+    wood_slippage = wood_leg.slippage_pct or 0.0
+    plank_slippage = plank_leg.slippage_pct or 0.0 if plank_leg is not None else 0.0
+    if max(wood_slippage, plank_slippage) >= 8.0:
+        warnings.append(WarningCode.BUY_SLIPPAGE_ELEVE)
 
     return Route(
         tier=tier,
@@ -731,10 +774,12 @@ async def run_optimization(
 
     items = [item for item in (wood_item, plank_input_item, output_item) if item is not None]
     all_buy = sorted(set(params.buy_cities()) | set(params.sell_cities()))
-    # Les volumes servent à la fill probability (planks de sortie) et à estimer
-    # la profondeur des buy orders pour la récupération RRR (inputs à la ville
-    # specialite : Fort Sterling pour le bois, Martlock pour la peau).
-    history_cities = sorted({*params.sell_cities(), res.refining_city})
+    # Les volumes servent a :
+    # - fill probability (planks de sortie a la sell_city)
+    # - recuperation RRR (retours du raffinage vendus a la sell_city)
+    # - slippage buy-side V2.7 (profondeur estimee du carnet au buy_city)
+    # On les demande donc sur toutes les villes candidates.
+    history_cities = all_buy
     async with AodpClient(server=server, use_cache=use_cache) as client:
         quotes = await client.get_prices(items, all_buy)
         volumes = await client.get_history(items, history_cities)

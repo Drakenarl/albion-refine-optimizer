@@ -214,25 +214,53 @@ interface SourcingRowProps {
   label: string
 }
 
-const SourcingRow: FC<SourcingRowProps> = ({ leg, icon, label }) => (
-  <div className="rounded-lg border border-surface-border/60 bg-surface/60 p-3">
-    <div className="mb-2 flex items-center justify-between gap-2">
-      <div className="flex items-center gap-2 text-sm font-semibold text-ink">
-        {icon}
-        {label}
+const SourcingRow: FC<SourcingRowProps> = ({ leg, icon, label }) => {
+  const slippage = leg.slippage_pct ?? 0
+  const hasInflation = slippage > 0.1 // ignore l'arrondi
+  const slippageTone =
+    slippage >= 15 ? 'text-negative' : slippage >= 8 ? 'text-caution' : 'text-ink-muted'
+  const slippageTooltip = hasInflation
+    ? `Ref AODP ${leg.prix_ref?.toFixed(0)} s → prix effectif estimé ${leg.prix_unitaire.toFixed(0)} s (+${slippage.toFixed(1)}%). ` +
+      `Profondeur : +${(leg.slippage_qty_pct ?? 0).toFixed(1)}% · Fraîcheur : +${(leg.slippage_age_pct ?? 0).toFixed(1)}%.`
+    : undefined
+
+  return (
+    <div className="rounded-lg border border-surface-border/60 bg-surface/60 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+          {icon}
+          {label}
+        </div>
+        <FreshnessBadge level={leg.freshness} ageHours={leg.data_age_hours} compact />
       </div>
-      <FreshnessBadge level={leg.freshness} ageHours={leg.data_age_hours} compact />
+      <div className="flex items-baseline justify-between gap-3 text-xs">
+        <span className="text-ink-muted">
+          {leg.city} —{' '}
+          {hasInflation ? (
+            <>
+              <span className="num text-ink-faint line-through" title={slippageTooltip}>
+                {leg.prix_ref?.toFixed(0)} s
+              </span>{' '}
+              <span className="num text-ink" title={slippageTooltip}>
+                {leg.prix_unitaire.toFixed(0)} s
+              </span>{' '}
+              <span
+                className={cn('num text-[10px] font-semibold', slippageTone)}
+                title={slippageTooltip}
+              >
+                +{slippage.toFixed(1)}%
+              </span>
+            </>
+          ) : (
+            <span className="num text-ink">{leg.prix_unitaire.toFixed(0)} s</span>
+          )}{' '}
+          × <span className="num text-ink">{leg.quantite}</span>
+        </span>
+        <span className="num text-sm font-semibold text-ink">{fmtSilver(leg.cout_total)}</span>
+      </div>
     </div>
-    <div className="flex items-baseline justify-between gap-3 text-xs">
-      <span className="text-ink-muted">
-        {leg.city} —{' '}
-        <span className="num text-ink">{leg.prix_unitaire.toFixed(0)} s</span> ×{' '}
-        <span className="num text-ink">{leg.quantite}</span>
-      </span>
-      <span className="num text-sm font-semibold text-ink">{fmtSilver(leg.cout_total)}</span>
-    </div>
-  </div>
-)
+  )
+}
 
 interface MetricProps {
   label: string

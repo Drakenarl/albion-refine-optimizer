@@ -44,6 +44,13 @@ const CONFIG: Record<
     description: 'La recup a ecouler depasse 50% du volume 24h. Risque d\'ecraser le carnet.',
     classes: 'text-caution bg-caution/10 border-caution/40',
   },
+  BUY_SLIPPAGE_ELEVE: {
+    icon: <AlertTriangle className="h-3.5 w-3.5" />,
+    label: 'Prix d\'achat incertain',
+    description:
+      'Slippage combine (profondeur + fraicheur) > 8% : le sell_price_min AODP est probablement loin de la realite. Verifie le carnet en jeu avant de committer.',
+    classes: 'text-caution bg-caution/10 border-caution/40',
+  },
 }
 
 const WarningBadge: FC<Props> = ({ code, detail }) => {

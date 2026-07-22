@@ -1,6 +1,7 @@
 import { useEffect, type FC } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
+  AlertTriangle,
   ArrowRight,
   Coins,
   Factory,
@@ -285,6 +286,53 @@ const HowItWorksModal: FC<Props> = ({ open, onClose }) => {
                   <strong>Important :</strong> le coût d'achat affiché n'est pas décoté par la
                   freshness. Confirme toujours le prix au marché en jeu avant de dépenser gros
                   — si le carnet a bougé depuis la dernière upload, tu risques de payer plus.
+                </Callout>
+              </Section>
+
+              <Section
+                icon={<AlertTriangle className="h-4 w-4" />}
+                title="Slippage — pourquoi le prix d'achat affiché est plus haut que l'AODP"
+              >
+                <p>
+                  L'AODP renvoie <span className="num">sell_price_min</span> — le prix du
+                  meilleur ordre. Mais il ne dit pas <strong>combien d'unités</strong> sont
+                  disponibles à ce prix. Souvent : 2 unités à 370, puis un mur à 400.
+                </p>
+                <p className="mt-2">
+                  Si tu demandes 3000 unités, tu vas racler le carnet et payer un prix moyen
+                  bien au-dessus du top. L'outil corrige ça en gonflant le prix d'achat de deux
+                  composantes :
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border border-surface-border/60 bg-surface/40 p-3">
+                    <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-primary-300">
+                      Profondeur
+                    </h4>
+                    <p className="text-xs text-ink-muted">
+                      Ratio qté demandée / volume 24h. De 0% (marché épais) à +20% (tu veux
+                      le double du volume qui trade en 24h).
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-surface-border/60 bg-surface/40 p-3">
+                    <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-primary-300">
+                      Fraîcheur
+                    </h4>
+                    <p className="text-xs text-ink-muted">
+                      Âge de la donnée AODP. De 0% (&lt; 30 min) à +15% (&gt; 4h). Symétrique
+                      de la décote appliquée aux revenus.
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-ink-muted">
+                  Total combiné plafonné à <strong>+25%</strong>. Sur la card, tu vois le prix
+                  ref AODP barré + le prix effectif + un badge <span className="num">+X%</span>.
+                  Si &gt; 8%, un warning <strong>Prix d'achat incertain</strong> apparaît.
+                </p>
+                <Callout tone="info">
+                  <strong>Ce que ça change concrètement :</strong> les ROI affichées sont
+                  désormais plus honnêtes mais plus basses qu'avant. Une route à +25% ROI que
+                  tu voyais avant peut passer à +12% aujourd'hui — c'est la même route, l'outil
+                  admet juste que le carnet n'était pas infini.
                 </Callout>
               </Section>
 

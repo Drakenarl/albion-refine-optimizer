@@ -80,6 +80,10 @@ class WarningCode(StrEnum):
     DATA_JAUNE = "DATA_JAUNE"
     RECUP_PARTIELLE = "RECUP_PARTIELLE"
     RECUP_SATURATION = "RECUP_SATURATION"
+    # V2.7 : slippage combine (profondeur + fraicheur) > 8% sur au moins une
+    # jambe d'achat. Signale que le sell_price_min AODP est probablement loin
+    # de la realite du carnet -> confirme le prix en jeu avant de committer.
+    BUY_SLIPPAGE_ELEVE = "BUY_SLIPPAGE_ELEVE"
 
 
 # Date sentinelle renvoyée par l'AODP quand aucune donnée n'existe.
@@ -232,7 +236,14 @@ class SourcingLeg(BaseModel):
     item_id: str
     tier: int
     city: str
+    # ``prix_unitaire`` = prix EFFECTIF utilise dans les calculs (deja gonfle du
+    # slippage V2.7 si applicable). ``prix_ref`` est le sell_price_min brut
+    # d'AODP, expose pour l'UI et la transparence.
     prix_unitaire: float
+    prix_ref: float | None = None
+    slippage_pct: float | None = None  # inflation combinee, en %
+    slippage_qty_pct: float | None = None  # composante profondeur seule, en %
+    slippage_age_pct: float | None = None  # composante fraicheur seule, en %
     quantite: int
     cout_total: float
     data_age_hours: float | None = None

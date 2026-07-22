@@ -136,6 +136,37 @@ export const GLOSSARY: Record<string, ReactNode> = {
     </>
   ),
 
+  buy_slippage: (
+    <>
+      <p>
+        <strong>Inflation appliquée au prix d'achat AODP.</strong>
+      </p>
+      <p className="mt-1.5 text-ink-muted">
+        AODP n'expose que <span className="num">sell_price_min</span> (le top du
+        carnet), pas la quantité disponible à ce prix. Sur un carnet réel, il y a
+        souvent 2 unités à 370 puis un mur à 400.
+      </p>
+      <p className="mt-1.5 text-ink-muted">
+        Le prix effectif utilisé pour la ROI est donc gonflé de deux composantes :
+      </p>
+      <ul className="mt-1 list-disc pl-4 text-ink-muted">
+        <li>
+          <strong>Profondeur</strong> : ratio quantité demandée / volume 24h. De
+          0% (marché épais) à +20% (tu veux le double du volume 24h).
+        </li>
+        <li>
+          <strong>Fraîcheur</strong> : âge de la donnée AODP. De 0% (&lt; 30 min) à
+          +15% (&gt; 4h).
+        </li>
+      </ul>
+      <p className="mt-1.5 text-ink-muted">
+        Total plafonné à +25% pour éviter de tuer une route sur un chiffre
+        théorique. Si l'inflation dépasse 8%, un warning s'affiche pour te faire
+        vérifier le carnet en jeu.
+      </p>
+    </>
+  ),
+
   enchant: (
     <>
       <p>

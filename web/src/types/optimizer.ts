@@ -22,6 +22,7 @@ export type WarningCode =
   | 'DATA_JAUNE'
   | 'RECUP_PARTIELLE'
   | 'RECUP_SATURATION'
+  | 'BUY_SLIPPAGE_ELEVE'
 
 export interface SourcingLeg {
   kind: 'wood' | 'plank'
@@ -29,6 +30,10 @@ export interface SourcingLeg {
   tier: number
   city: string
   prix_unitaire: number
+  prix_ref: number | null
+  slippage_pct: number | null
+  slippage_qty_pct: number | null
+  slippage_age_pct: number | null
   quantite: number
   cout_total: number
   data_age_hours: number | null
