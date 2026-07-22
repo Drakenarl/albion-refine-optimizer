@@ -236,14 +236,12 @@ const SourcingRow: FC<SourcingRowProps> = ({ leg, icon, label }) => {
       <div className="flex items-baseline justify-between gap-3 text-xs">
         <span className="text-ink-muted">
           {leg.city} —{' '}
-          {hasInflation ? (
+          <span className="num text-ink" title={slippageTooltip}>
+            {leg.prix_unitaire.toFixed(0)} s
+          </span>
+          {hasInflation && (
             <>
-              <span className="num text-ink-faint line-through" title={slippageTooltip}>
-                {leg.prix_ref?.toFixed(0)} s
-              </span>{' '}
-              <span className="num text-ink" title={slippageTooltip}>
-                {leg.prix_unitaire.toFixed(0)} s
-              </span>{' '}
+              {' '}
               <span
                 className={cn('num text-[10px] font-semibold', slippageTone)}
                 title={slippageTooltip}
@@ -251,10 +249,8 @@ const SourcingRow: FC<SourcingRowProps> = ({ leg, icon, label }) => {
                 +{slippage.toFixed(1)}%
               </span>
             </>
-          ) : (
-            <span className="num text-ink">{leg.prix_unitaire.toFixed(0)} s</span>
-          )}{' '}
-          × <span className="num text-ink">{leg.quantite}</span>
+          )}
+          {' '}× <span className="num text-ink">{leg.quantite}</span>
         </span>
         <span className="num text-sm font-semibold text-ink">{fmtSilver(leg.cout_total)}</span>
       </div>

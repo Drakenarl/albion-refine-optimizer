@@ -130,17 +130,25 @@ class TestScenarioAFiltering:
         )
         return optimize(params, quotes, volumes, now)
 
-    def test_filter_uses_scenario_a_margin(self) -> None:
-        # Marge A ~14.5% < 20% alors que la marge B ~28.7% la dépasse :
-        # la route doit être écartée sur le critère safe.
-        assert self._run(seuil=20).routes == []
-        assert self._run(seuil=10).routes != []
+    def test_seuil_is_informational_not_a_filter(self) -> None:
+        # V2.8.1 : le seuil ne filtre plus les routes. Meme si aucune ne le
+        # depasse, on garde les top_n meilleures et le frontend affiche
+        # "toutes deficitaires" en header.
+        r_seuil_haut = self._run(seuil=100)
+        r_seuil_bas = self._run(seuil=-100)
+        # Meme nombre de routes affichees quel que soit le seuil.
+        assert len(r_seuil_haut.routes) == len(r_seuil_bas.routes)
+        # Les routes sont identiques (memes candidats, meme tri).
+        assert [r.marge_pct for r in r_seuil_haut.routes] == [
+            r.marge_pct for r in r_seuil_bas.routes
+        ]
 
-    def test_discarded_report_exposes_margin(self) -> None:
+    def test_discarded_only_populated_when_no_candidates_pass(self) -> None:
+        # Puisqu'on garde toujours les top_n meilleures, discarded_best est
+        # None tant qu'on a au moins une route en output.
         result = self._run(seuil=20)
-        assert result.discarded_best is not None
-        assert result.discarded_best.marge_pct is not None
-        assert result.discarded_best.marge_pct < 20
+        assert result.routes  # on a bien des routes
+        assert result.discarded_best is None
 
 
 class TestFreshnessWeighting:
@@ -361,15 +369,19 @@ class TestFixtureIntegration:
         history_t7: list[VolumeData],
         now_ref: datetime,
     ) -> None:
+        # V2.8.1 : le seuil ne filtre plus, les top_n meilleures sont toujours
+        # retournees. On verifie donc que les routes sont bien retournees mais
+        # sont toutes sous le seuil (100 000% est irreatteignable).
         result = optimize(
-            self._params(seuil_marge_min_pct=100000),
+            self._params(seuil_marge_min_pct=100_000),
             prices_t7,
             history_t7,
             now_ref,
         )
-        assert result.routes == []
-        assert result.discarded_best is not None
-        assert "seuil" in result.discarded_best.raison
+        assert result.routes  # top_n toujours renseigne
+        assert all(r.marge_pct < 100_000 for r in result.routes)
+        # discarded_best reste None puisqu'on a des routes.
+        assert result.discarded_best is None
 
     def test_sort_by_margin_when_no_focus(
         self,

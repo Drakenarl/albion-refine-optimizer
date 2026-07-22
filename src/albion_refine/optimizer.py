@@ -724,16 +724,24 @@ def optimize(
                 if route is not None:
                     candidates.append(route)
 
-    passing = [r for r in candidates if r.marge_pct >= params.seuil_marge_min_pct]
-    passing.sort(key=_sort_key(params), reverse=True)
-    top = passing[: params.top_n]
+    # V2.8.1 : on garde toujours les top_n meilleures routes par ROI, meme si
+    # elles ne passent pas le seuil. Le seuil devient purement informationnel
+    # (le header du frontend colore "rentable" vs "deficitaire"). Cela evite
+    # que les runs qui deviendraient tres serres (apres recalibrage slippage
+    # V2.8) affichent 0 ou 1 route au lieu des 3 attendues.
+    all_sorted = sorted(candidates, key=_sort_key(params), reverse=True)
+    top = all_sorted[: params.top_n]
     for rank, route in enumerate(top, start=1):
         route.rank = rank
 
     discarded_best: DiscardedRoute | None = None
     discarded_top: list[DiscardedRoute] = []
-    if not top and candidates:
-        discarded_top = _discarded_top(candidates, params, params.top_n)
+    # ``discarded_top`` reste utile pour les cas ou meme les top_n sont trop
+    # mauvaises (par ex. tous negatifs) : on expose les alternatives pour aider
+    # l'utilisateur a arbitrer. On les prend parmi les candidats sous seuil.
+    below_seuil = [r for r in candidates if r.marge_pct < params.seuil_marge_min_pct]
+    if not top and below_seuil:
+        discarded_top = _discarded_top(below_seuil, params, params.top_n)
         discarded_best = discarded_top[0] if discarded_top else None
 
     return OptimizationResult(
